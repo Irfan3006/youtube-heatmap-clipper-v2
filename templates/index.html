@@ -113,8 +113,8 @@
           <div class="row">
             <label class="label" data-i18n="label.subtitle">Subtitle</label>
             <select id="subtitle" class="input">
-              <option value="n" selected data-i18n="opt.no">No</option>
-              <option value="y" data-i18n="opt.yes">Yes</option>
+              <option value="n" data-i18n="opt.no">No</option>
+              <option value="y" selected data-i18n="opt.yes">Yes</option>
             </select>
             <div class="help" data-i18n="help.subtitle">Kalau Yes, audio ditranskrip jadi teks lalu dibakar ke video.</div>
           </div>
@@ -143,13 +143,23 @@
           </div>
         </div>
 
-        <div class="row">
-          <label class="label" data-i18n="label.subtitle_location">Subtitle Location</label>
-          <select id="subtitle_location" class="input">
-            <option value="bottom" selected data-i18n="opt.subtitle_location.bottom">Bottom</option>
-            <option value="center" data-i18n="opt.subtitle_location.center">Centered</option>
-          </select>
-          <div class="help" data-i18n="help.subtitle_location">Bottom = lebih natural buat Shorts. Centered = lebih “in your face”.</div>
+        <div class="grid2">
+          <div class="row">
+            <label class="label" data-i18n="label.subtitle_location">Subtitle Location</label>
+            <select id="subtitle_location" class="input">
+              <option value="bottom" selected data-i18n="opt.subtitle_location.bottom">Bottom</option>
+              <option value="center" data-i18n="opt.subtitle_location.center">Centered</option>
+            </select>
+            <div class="help" data-i18n="help.subtitle_location">Bottom = lebih natural buat Shorts. Centered = lebih “in your face”.</div>
+          </div>
+          <div class="row">
+            <label class="label" data-i18n="label.subtitle_lang">Subtitle Language</label>
+            <select id="subtitle_lang" class="input">
+              <option value="id" selected data-i18n="opt.subtitle_lang.id">Indonesian</option>
+              <option value="en" data-i18n="opt.subtitle_lang.en">English</option>
+            </select>
+            <div class="help" data-i18n="help.subtitle_lang">Pilih bahasa audio asal untuk hasil transkripsi subtitle terbaik.</div>
+          </div>
         </div>
 
         <div class="row">
