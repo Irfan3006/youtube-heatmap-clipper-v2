@@ -96,6 +96,7 @@
                 <option value="low">Low (Hanya Spikes Besar)</option>
                 <option value="medium" selected>Medium (Standard / Seimbang)</option>
                 <option value="high">High (Agresif Viral / Ambil Banyak Momen)</option>
+                <option value="extreme">Extreme (Sangat Agresif / Ambil Semua Momen)</option>
               </select>
               <div class="help">Makin tinggi sensitivitas, makin agresif program mendeteksi bagian viral.</div>
             </div>
@@ -157,7 +158,7 @@
           <div class="grid2" style="margin-top: 8px;">
             <div class="row">
               <label class="label">Relock Timeout (frames)</label>
-              <input id="smart_relock_timeout" class="input" type="number" min="1" max="300" value="30" />
+              <input id="smart_relock_timeout" class="input" type="number" min="1" max="600" value="150" />
               <div class="help">Batas frame mengingat posisi wajah terakhir sebelum reset.</div>
             </div>
             <div class="row">

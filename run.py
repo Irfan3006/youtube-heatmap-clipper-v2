@@ -811,11 +811,23 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
                 gray_roi = gray[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
                 
                 # Detect frontal face in ROI
-                faces = face_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                faces_detected = face_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                faces = [tuple(f) for f in faces_detected] if len(faces_detected) > 0 else []
                 
                 # Fallback to profile face in ROI if frontal face fails
                 if len(faces) == 0 and not profile_cascade.empty():
-                    faces = profile_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                    # Left-profile
+                    faces_p = profile_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                    if len(faces_p) > 0:
+                        faces.extend([tuple(f) for f in faces_p])
+                    
+                    # Right-profile (flipped)
+                    flipped_roi = cv2.flip(gray_roi, 1)
+                    faces_pf = profile_cascade.detectMultiScale(flipped_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                    if len(faces_pf) > 0:
+                        for (fx, fy, fw, fh) in faces_pf:
+                            mapped_x = roi_w - fx - fw
+                            faces.append((mapped_x, fy, fw, fh))
                 
                 if len(faces) > 0:
                     # Choose face closest to ROI center (the previous face position)
@@ -838,9 +850,23 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
                     small_gray = gray
 
                 # Detect faces
-                faces = face_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                faces_detected = face_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                faces = [tuple(f) for f in faces_detected] if len(faces_detected) > 0 else []
+                
                 if len(faces) == 0 and not profile_cascade.empty():
-                    faces = profile_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                    # Left-profile
+                    faces_p = profile_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                    if len(faces_p) > 0:
+                        faces.extend([tuple(f) for f in faces_p])
+                    
+                    # Right-profile (flipped)
+                    flipped_small = cv2.flip(small_gray, 1)
+                    faces_pf = profile_cascade.detectMultiScale(flipped_small, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                    if len(faces_pf) > 0:
+                        w_small = small_gray.shape[1]
+                        for (fx, fy, fw, fh) in faces_pf:
+                            mapped_x = w_small - fx - fw
+                            faces.append((mapped_x, fy, fw, fh))
                 
                 if len(faces) > 0:
                     # Choose face closest to last known position if available, else the largest
@@ -953,7 +979,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
             "smooth_factor": 0.10,
             "deadzone_size": 0.15,
             "tracking_speed": 15,
-            "relock_timeout": 30,
+            "relock_timeout": 150,
             "crop_padding": 0.10
         }
     start_original = item["start"]

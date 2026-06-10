@@ -110,7 +110,7 @@ def run_job(job_id, payload):
             "smooth_factor": float(payload.get("smart_smooth_factor") or 0.10),
             "deadzone_size": float(payload.get("smart_deadzone_size") or 0.15),
             "tracking_speed": int(payload.get("smart_tracking_speed") or 15),
-            "relock_timeout": int(payload.get("smart_relock_timeout") or 30),
+            "relock_timeout": int(payload.get("smart_relock_timeout") or 150),
             "crop_padding": float(payload.get("smart_crop_padding") or 0.10)
         }
 
@@ -121,6 +121,8 @@ def run_job(job_id, payload):
         min_score = 0.20
         if viral_sensitivity == "high":
             min_score = 0.10
+        elif viral_sensitivity == "extreme":
+            min_score = 0.02
         elif viral_sensitivity == "low":
             min_score = 0.30
             
@@ -365,6 +367,8 @@ def api_scan():
     min_score = 0.20
     if viral_sensitivity == "high":
         min_score = 0.10
+    elif viral_sensitivity == "extreme":
+        min_score = 0.02
     elif viral_sensitivity == "low":
         min_score = 0.30
         
