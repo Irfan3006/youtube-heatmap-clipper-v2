@@ -69,14 +69,15 @@ def add_log(job_id, line):
             job["logs"] = job["logs"][-300:]
 
 
-def list_outputs(job_dir):
+def list_outputs(job_dir, job_id=None):
     if not os.path.isdir(job_dir):
         return []
     items = []
     for name in os.listdir(job_dir):
         path = os.path.join(job_dir, name)
         if os.path.isfile(path) and name.lower().endswith(".mp4"):
-            items.append({"name": name, "size": os.path.getsize(path)})
+            if job_id is None or name.startswith(f"clip_{job_id}_"):
+                items.append({"name": name, "size": os.path.getsize(path)})
     items.sort(key=lambda x: x["name"])
     return items
 
@@ -93,7 +94,7 @@ def run_job(job_id, payload):
         crop = payload.get("crop") or "default"
         ratio = payload.get("ratio") or "9:16"
         subtitle = bool(payload.get("subtitle"))
-        subtitle_lang = payload.get("subtitle_lang") or "id"
+        subtitle_lang = payload.get("subtitle_lang") or "en"
         whisper_model = payload.get("whisper_model") or "small"
         subtitle_font = payload.get("subtitle_font") or "Arial"
         subtitle_location = payload.get("subtitle_location") or "bottom"
@@ -104,17 +105,27 @@ def run_job(job_id, payload):
         max_clips = safe_int(payload.get("max_clips"), 10)
         mode = payload.get("mode") or "heatmap"
         set_job(job_id, subtitle_enabled=subtitle)
+ 
+        smart_config = {
+            "smooth_factor": float(payload.get("smart_smooth_factor") or 0.10),
+            "deadzone_size": float(payload.get("smart_deadzone_size") or 0.15),
+            "tracking_speed": int(payload.get("smart_tracking_speed") or 15),
+            "relock_timeout": int(payload.get("smart_relock_timeout") or 30),
+            "crop_padding": float(payload.get("smart_crop_padding") or 0.10)
+        }
 
         core.WHISPER_MODEL = whisper_model
         core.SUBTITLE_FONT = subtitle_font
         core.SUBTITLE_FONTS_DIR = subtitle_fontsdir
         core.SUBTITLE_LOCATION = subtitle_location
-        core.PADDING = max(0, padding if padding is not None else 10)
-        core.set_ratio_preset(ratio)
+        with jobs_lock:
+            core.PADDING = max(0, padding if padding is not None else 10)
+            core.set_ratio_preset(ratio)
+            out_w = core.OUT_WIDTH
+            out_h = core.OUT_HEIGHT
 
-        job_dir = os.path.join("clips", job_id)
+        job_dir = "clips"
         os.makedirs(job_dir, exist_ok=True)
-        core.OUTPUT_DIR = job_dir
 
         core.cek_dependensi._args = SimpleNamespace(update_ytdlp=False)
         ok = core.cek_dependensi(install_whisper=subtitle, fatal=False)
@@ -151,21 +162,33 @@ def run_job(job_id, payload):
             if not targets:
                 raise ValueError("Segment pilihan invalid")
         elif mode == "custom":
-            start_s = parse_time_to_seconds(payload.get("start"))
-            end_s = parse_time_to_seconds(payload.get("end"))
-            if start_s is None or end_s is None:
-                raise ValueError("Start/End belum diisi")
-            if end_s <= start_s:
-                raise ValueError("End harus lebih besar dari Start")
-            targets = [{"start": float(start_s), "duration": float(end_s - start_s), "score": 1.0}]
+            custom_segs = payload.get("custom_segments")
+            if isinstance(custom_segs, list) and len(custom_segs) > 0:
+                for seg in custom_segs:
+                    start_s = parse_time_to_seconds(seg.get("start"))
+                    end_s = parse_time_to_seconds(seg.get("end"))
+                    if start_s is not None and end_s is not None:
+                        if end_s <= start_s:
+                            raise ValueError(f"End ({seg.get('end')}) harus lebih besar dari Start ({seg.get('start')})")
+                        targets.append({"start": float(start_s), "duration": float(end_s - start_s), "score": 1.0})
+                if not targets:
+                    raise ValueError("Manual timestamp tidak ada yang valid")
+            else:
+                start_s = parse_time_to_seconds(payload.get("start"))
+                end_s = parse_time_to_seconds(payload.get("end"))
+                if start_s is None or end_s is None:
+                    raise ValueError("Start/End belum diisi")
+                if end_s <= start_s:
+                    raise ValueError("End harus lebih besar dari Start")
+                targets = [{"start": float(start_s), "duration": float(end_s - start_s), "score": 1.0}]
         else:
             if not targets_heatmap:
                 raise RuntimeError("Tidak ada heatmap/Most Replayed data")
-            targets = targets_heatmap[: max(1, max_clips or 10)]
+            targets = core.select_non_overlapping(targets_heatmap, max(1, max_clips or 10), padding)
 
         set_job(job_id, total=len(targets), done=0, status_text="processing")
 
-        local_video_path = os.path.join(job_dir, f"temp_full_{video_id}.mkv")
+        local_video_path = os.path.join(job_dir, f"temp_full_{job_id}_{video_id}.mkv")
         add_log(job_id, "Downloading full video locally (unthrottled)...")
         if core.unduh_video_penuh(video_id, local_video_path):
             add_log(job_id, "✅ Full video downloaded successfully.")
@@ -218,7 +241,13 @@ def run_job(job_id, payload):
                         event_hook=event_hook,
                         stream_urls=stream_urls,
                         local_video_path=local_video_path,
-                        subtitle_lang=subtitle_lang
+                        subtitle_lang=subtitle_lang,
+                        output_ratio=ratio,
+                        out_w=out_w,
+                        out_h=out_h,
+                        output_dir=job_dir,
+                        job_id=job_id,
+                        smart_config=smart_config
                     )
                     futures[f] = idx
 
@@ -229,7 +258,7 @@ def run_job(job_id, payload):
                     done_count += 1
                     if ok:
                         success += 1
-                    set_job(job_id, done=done_count, success=success, outputs=list_outputs(job_dir))
+                    set_job(job_id, done=done_count, success=success, outputs=list_outputs(job_dir, job_id))
         finally:
             if local_video_path and os.path.exists(local_video_path):
                 add_log(job_id, "Cleaning up temporary full video file...")
@@ -238,7 +267,7 @@ def run_job(job_id, payload):
                 except Exception:
                     pass
 
-        set_job(job_id, status="done", finished_at=now_ms(), outputs=list_outputs(job_dir))
+        set_job(job_id, status="done", finished_at=now_ms(), outputs=list_outputs(job_dir, job_id))
     except Exception as e:
         set_job(job_id, status="error", error=str(e), finished_at=now_ms())
 
@@ -364,8 +393,7 @@ def api_job(job_id):
 
 @app.get("/clips/<job_id>/<path:filename>")
 def serve_clip(job_id, filename):
-    job_dir = os.path.join("clips", job_id)
-    return send_from_directory(job_dir, filename, as_attachment=True)
+    return send_from_directory("clips", filename, as_attachment=True)
 
 
 if __name__ == "__main__":

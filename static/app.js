@@ -18,7 +18,8 @@ const I18N = {
     "opt.crop.default": "Default",
     "opt.crop.split_left": "Split Left",
     "opt.crop.split_right": "Split Right",
-    "help.crop": "Split itu buat gaming: atas gameplay, bawah facecam.",
+    "opt.crop.smart": "Smart Crop (Face Tracking)",
+    "help.crop": "Split itu buat gaming: atas gameplay, bawah facecam. Smart Crop buat track wajah otomatis.",
     "label.padding": "Padding (detik)",
     "help.padding": "Nambah detik sebelum & sesudah momen biar nggak “kepotong nanggung”.",
     "label.max_clips": "Max clips",
@@ -89,7 +90,8 @@ const I18N = {
     "opt.crop.default": "Default",
     "opt.crop.split_left": "Split Left",
     "opt.crop.split_right": "Split Right",
-    "help.crop": "Split is for gaming: gameplay on top, facecam below.",
+    "opt.crop.smart": "Smart Crop (Face Tracking)",
+    "help.crop": "Split is for gaming: gameplay on top, facecam below. Smart Crop tracks the main speaker automatically.",
     "label.padding": "Padding (seconds)",
     "help.padding": "Adds seconds before & after, so it doesn’t cut awkwardly.",
     "label.max_clips": "Max clips",
@@ -350,6 +352,21 @@ function readPayload() {
   const fontSel = $("subtitle_font_select").value;
   const fontCustom = ($("subtitle_font_custom").value || "").trim();
   const subtitleFont = fontSel === "custom" ? fontCustom : fontSel;
+  const customSegments = [];
+  if ($("mode").value === "custom") {
+    const container = $("manualClipsContainer");
+    if (container) {
+      container.querySelectorAll(".manual-clip-row").forEach(row => {
+        const startIn = row.querySelector(".manual-start");
+        const endIn = row.querySelector(".manual-end");
+        const startVal = startIn ? (startIn.value || "").trim() : "";
+        const endVal = endIn ? (endIn.value || "").trim() : "";
+        if (startVal && endVal) {
+          customSegments.push({ start: startVal, end: endVal });
+        }
+      });
+    }
+  }
   return {
     url: $("url").value,
     mode: $("mode").value,
@@ -362,9 +379,13 @@ function readPayload() {
     subtitle_font: subtitleFont,
     subtitle_location: $("subtitle_location").value,
     subtitle_fontsdir: $("subtitle_fontsdir").value || "",
-    subtitle_lang: $("subtitle_lang").value || "id",
-    start: $("start").value || "",
-    end: $("end").value || "",
+    subtitle_lang: $("subtitle_lang").value || "en",
+    custom_segments: customSegments,
+    smart_smooth_factor: Number($("smart_smooth_factor")?.value || 0.10),
+    smart_deadzone_size: Number($("smart_deadzone_size")?.value || 0.15),
+    smart_tracking_speed: Number($("smart_tracking_speed")?.value || 15),
+    smart_relock_timeout: Number($("smart_relock_timeout")?.value || 30),
+    smart_crop_padding: Number($("smart_crop_padding")?.value || 0.10)
   };
 }
 
@@ -492,8 +513,36 @@ function renderSegments(segments) {
         return;
       }
       if ($("mode").value === "custom") {
-        $("start").value = Math.floor(start);
-        $("end").value = Math.floor(end);
+        const container = $("manualClipsContainer");
+        if (container) {
+          const rows = container.querySelectorAll(".manual-clip-row");
+          let populated = false;
+          for (let row of rows) {
+            const startIn = row.querySelector(".manual-start");
+            const endIn = row.querySelector(".manual-end");
+            if (startIn && endIn && !startIn.value && !endIn.value) {
+              startIn.value = Math.floor(start);
+              endIn.value = Math.floor(end);
+              populated = true;
+              break;
+            }
+          }
+          if (!populated) {
+            const newCount = rows.length + 1;
+            $("manual_clips_count").value = newCount;
+            renderManualClipRows();
+            const newRows = container.querySelectorAll(".manual-clip-row");
+            const lastRow = newRows[newRows.length - 1];
+            if (lastRow) {
+              const startIn = lastRow.querySelector(".manual-start");
+              const endIn = lastRow.querySelector(".manual-end");
+              if (startIn && endIn) {
+                startIn.value = Math.floor(start);
+                endIn.value = Math.floor(end);
+              }
+            }
+          }
+        }
         return;
       }
       if (selectedKeys.has(key)) selectedKeys.delete(key);
@@ -522,7 +571,7 @@ function renderProgress(job) {
   meta.textContent = `${job.status} • ${(job.status_text || "").trim()}${stage ? " • " + stage : ""}`.trim();
 
   const bar = document.createElement("div");
-  bar.innerHTML = `<div class="bar"><div style="width:${pct}%"></div></div>`;
+  bar.innerHTML = `<div class="bar"><div style="width:${pct}%"></div><div class="pct">${pct}%</div></div>`;
   root.appendChild(bar);
 
   const line = document.createElement("div");
@@ -643,6 +692,48 @@ async function pollJob(jobId) {
   }
 }
 
+function renderManualClipRows() {
+  const container = $("manualClipsContainer");
+  if (!container) return;
+  const countInput = $("manual_clips_count");
+  if (!countInput) return;
+  const count = Math.max(1, parseInt(countInput.value) || 1);
+  
+  // Store existing values to preserve them
+  const existingValues = [];
+  container.querySelectorAll(".manual-clip-row").forEach(row => {
+    const sInput = row.querySelector(".manual-start");
+    const eInput = row.querySelector(".manual-end");
+    existingValues.push({
+      start: sInput ? sInput.value : "",
+      end: eInput ? eInput.value : ""
+    });
+  });
+  
+  container.innerHTML = "";
+  for (let i = 1; i <= count; i++) {
+    const row = document.createElement("div");
+    row.className = "manual-clip-row grid2";
+    row.style.marginBottom = "8px";
+    row.style.gap = "12px";
+    
+    const startVal = existingValues[i - 1]?.start || "";
+    const endVal = existingValues[i - 1]?.end || "";
+    
+    row.innerHTML = `
+      <div class="row">
+        <label class="label">Clip #${i} Start</label>
+        <input class="input manual-start" value="${startVal}" placeholder="689 atau 11:29" />
+      </div>
+      <div class="row">
+        <label class="label">Clip #${i} End</label>
+        <input class="input manual-end" value="${endVal}" placeholder="742 atau 12:22" />
+      </div>
+    `;
+    container.appendChild(row);
+  }
+}
+
 function toggleMode() {
   const isCustom = $("mode").value === "custom";
   $("customBox").classList.toggle("hide", !isCustom);
@@ -661,8 +752,16 @@ function toggleFont() {
   $("subtitle_font_custom").classList.toggle("hide", !isCustom);
 }
 
+function toggleSmartCropBox() {
+  const isSmart = $("crop").value === "smart";
+  $("smartCropBox")?.classList.toggle("hide", !isSmart);
+}
+
 $("mode").addEventListener("change", toggleMode);
 $("subtitle_font_select").addEventListener("change", toggleFont);
+$("crop").addEventListener("change", toggleSmartCropBox);
+$("manual_clips_count")?.addEventListener("input", renderManualClipRows);
+$("manual_clips_count")?.addEventListener("change", renderManualClipRows);
 $("url").addEventListener("input", debounce(preview, 500));
 $("scanBtn").addEventListener("click", scan);
 $("clipBtn").addEventListener("click", clip);
@@ -682,4 +781,6 @@ currentLang = currentLang === "en" ? "en" : "id";
 applyI18n();
 toggleMode();
 toggleFont();
+toggleSmartCropBox();
+renderManualClipRows();
 renderSegments([]);

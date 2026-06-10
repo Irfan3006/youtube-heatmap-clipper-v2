@@ -94,8 +94,9 @@
               <option value="default" selected data-i18n="opt.crop.default">Default</option>
               <option value="split_left" data-i18n="opt.crop.split_left">Split Left</option>
               <option value="split_right" data-i18n="opt.crop.split_right">Split Right</option>
+              <option value="smart" data-i18n="opt.crop.smart">Smart Crop (Face Tracking)</option>
             </select>
-            <div class="help" data-i18n="help.crop">Split itu buat gaming: atas gameplay, bawah facecam.</div>
+            <div class="help" data-i18n="help.crop">Split itu buat gaming: atas gameplay, bawah facecam. Smart Crop buat track wajah otomatis.</div>
           </div>
           <div class="row">
             <label class="label" data-i18n="label.padding">Padding (detik)</label>
@@ -106,6 +107,39 @@
             <label class="label" data-i18n="label.max_clips">Max clips</label>
             <input id="max_clips" class="input" type="number" min="1" value="6" />
             <div class="help" data-i18n="help.max_clips">Berapa potongan yang mau dihasilkan dari heatmap.</div>
+          </div>
+        </div>
+ 
+        <div id="smartCropBox" class="hide" style="margin-top: 12px; margin-bottom: 16px; border: 1px solid var(--border); padding: 12px; border-radius: 6px; background: rgba(255,255,255,0.02);">
+          <div class="panelTitle" style="font-size: 14px; margin-bottom: 8px; font-weight: bold; color: var(--fg);">Smart Crop Settings (Auto Face Tracking)</div>
+          <div class="grid3">
+            <div class="row">
+              <label class="label">Smooth Factor</label>
+              <input id="smart_smooth_factor" class="input" type="number" min="0.01" max="1.0" step="0.01" value="0.10" />
+              <div class="help">Makin kecil makin halus gerakan kamera (0.01 - 1.0).</div>
+            </div>
+            <div class="row">
+              <label class="label">Deadzone Size</label>
+              <input id="smart_deadzone_size" class="input" type="number" min="0.0" max="0.5" step="0.01" value="0.15" />
+              <div class="help">Ukuran area tengah aman tanpa gerakan kamera (0% - 50%).</div>
+            </div>
+            <div class="row">
+              <label class="label">Tracking Speed</label>
+              <input id="smart_tracking_speed" class="input" type="number" min="1" max="100" value="15" />
+              <div class="help">Batas kecepatan gerakan kamera per frame (px).</div>
+            </div>
+          </div>
+          <div class="grid2" style="margin-top: 8px;">
+            <div class="row">
+              <label class="label">Relock Timeout (frames)</label>
+              <input id="smart_relock_timeout" class="input" type="number" min="1" max="300" value="30" />
+              <div class="help">Batas frame mengingat posisi wajah terakhir sebelum reset.</div>
+            </div>
+            <div class="row">
+              <label class="label">Crop Padding</label>
+              <input id="smart_crop_padding" class="input" type="number" min="0.0" max="0.5" step="0.01" value="0.10" />
+              <div class="help">Padding ekstra di sekitar wajah (0% - 50%).</div>
+            </div>
           </div>
         </div>
 
@@ -155,8 +189,8 @@
           <div class="row">
             <label class="label" data-i18n="label.subtitle_lang">Subtitle Language</label>
             <select id="subtitle_lang" class="input">
-              <option value="id" selected data-i18n="opt.subtitle_lang.id">Indonesian</option>
-              <option value="en" data-i18n="opt.subtitle_lang.en">English</option>
+              <option value="id" data-i18n="opt.subtitle_lang.id">Indonesian</option>
+              <option value="en" selected data-i18n="opt.subtitle_lang.en">English</option>
             </select>
             <div class="help" data-i18n="help.subtitle_lang">Pilih bahasa audio asal untuk hasil transkripsi subtitle terbaik.</div>
           </div>
@@ -168,14 +202,14 @@
           <div class="help" data-i18n="help.subtitle_fontsdir">Folder berisi file .ttf/.otf buat subtitle. Default: folder project <b>fonts</b>.</div>
         </div>
 
-        <div id="customBox" class="grid2 hide">
-          <div class="row">
-            <label class="label" data-i18n="label.start">Start (detik atau mm:ss)</label>
-            <input id="start" class="input" placeholder="689 atau 11:29" data-i18n-placeholder="ph.start" />
+        <div id="customBox" class="hide" style="margin-bottom: 20px;">
+          <div class="row" style="margin-bottom: 16px;">
+            <label class="label">Jumlah Clip Manual</label>
+            <input id="manual_clips_count" class="input" type="number" min="1" max="50" value="1" />
+            <div class="help">Tentukan berapa banyak clip manual yang ingin dipotong secara bersamaan.</div>
           </div>
-          <div class="row">
-            <label class="label" data-i18n="label.end">End (detik atau mm:ss)</label>
-            <input id="end" class="input" placeholder="742 atau 12:22" data-i18n-placeholder="ph.end" />
+          <div id="manualClipsContainer">
+            <!-- Dynamic rows will be rendered here -->
           </div>
         </div>
 

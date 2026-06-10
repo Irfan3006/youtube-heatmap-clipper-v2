@@ -10,6 +10,11 @@ import argparse
 import warnings
 warnings.filterwarnings("ignore")
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 if sys.platform.startswith('win'):
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -20,7 +25,7 @@ if sys.platform.startswith('win'):
 
 OUTPUT_DIR = "clips"      # Directory where generated clips will be saved
 MAX_DURATION = 60         # Maximum duration (in seconds) for each clip
-MIN_SCORE = 0.40          # Minimum heatmap intensity score to be considered viral
+MIN_SCORE = 0.20          # Minimum heatmap intensity score to be considered viral
 MAX_CLIPS = 10            # Maximum number of clips to generate per video
 MAX_WORKERS = 1           # Number of parallel workers (reserved for future concurrency)
 PADDING = 10              # Extra seconds added before and after each detected segment
@@ -55,6 +60,141 @@ def set_ratio_preset(preset):
         OUT_WIDTH, OUT_HEIGHT = None, None
         return
     raise ValueError("Invalid ratio preset")
+
+def get_ratio_dimensions(preset):
+    if preset == "9:16":
+        return 720, 1280
+    if preset == "1:1":
+        return 720, 720
+    if preset == "16:9":
+        return 1280, 720
+    if preset == "original":
+        return None, None
+    raise ValueError("Invalid ratio preset")
+
+def detect_viral_spikes(heatmap_raw):
+    """
+    Identify segments in the raw heatmap that show sharp intensity increases (spikes)
+    above the local average. Enhance their scores by weighting both raw intensity
+    and spike magnitude.
+    """
+    if not heatmap_raw:
+        return []
+        
+    n = len(heatmap_raw)
+    values = []
+    for marker in heatmap_raw:
+        try:
+            values.append(float(marker.get("value", 0)))
+        except Exception:
+            values.append(0.0)
+            
+    # Calculate local averages using a moving window (window size 5)
+    local_averages = []
+    window_size = 5
+    half_w = window_size // 2
+    for i in range(n):
+        start_idx = max(0, i - half_w)
+        end_idx = min(n, i + half_w + 1)
+        sub_vals = values[start_idx:end_idx]
+        local_averages.append(sum(sub_vals) / len(sub_vals) if sub_vals else 0.0)
+        
+    enhanced_segments = []
+    for i in range(n):
+        try:
+            marker = heatmap_raw[i]
+            start = float(marker.get("start_time", 0))
+            end = float(marker.get("end_time", 0))
+            val = values[i]
+            
+            # Derivative (difference from previous point)
+            if i > 0:
+                diff = val - values[i-1]
+            else:
+                diff = 0.0
+                
+            # Spike magnitude: positive rise + how much it stands above local average
+            above_local = max(0.0, val - local_averages[i])
+            spike_magnitude = max(0.0, diff) + above_local
+            
+            # Final score weighting
+            final_score = 0.6 * val + 0.4 * spike_magnitude
+            
+            if final_score >= MIN_SCORE:
+                enhanced_segments.append({
+                    "start": start,
+                    "duration": min(end - start, MAX_DURATION),
+                    "score": final_score
+                })
+        except Exception:
+            continue
+            
+    return enhanced_segments
+
+def merge_adjacent_segments(segments, gap_limit=5.0):
+    """
+    Group consecutive/overlapping segments (within gap_limit seconds)
+    into a single segment. Capped at MAX_DURATION.
+    """
+    if not segments:
+        return []
+    
+    # Ensure sorted chronologically by start time
+    sorted_segs = sorted(segments, key=lambda x: x["start"])
+    
+    merged = []
+    current = sorted_segs[0].copy()
+    
+    for next_seg in sorted_segs[1:]:
+        current_end = current["start"] + current["duration"]
+        if next_seg["start"] <= current_end + gap_limit:
+            next_end = next_seg["start"] + next_seg["duration"]
+            new_end = max(current_end, next_end)
+            if new_end - current["start"] <= MAX_DURATION:
+                current["duration"] = new_end - current["start"]
+                current["score"] = max(current["score"], next_seg["score"])
+            else:
+                merged.append(current)
+                current = next_seg.copy()
+        else:
+            merged.append(current)
+            current = next_seg.copy()
+            
+    merged.append(current)
+    return merged
+
+def select_non_overlapping(segments, max_count, padding):
+    """
+    Select up to max_count segments from a list of segments (sorted by score descending),
+    ensuring that no selected segment has a padded time range that overlaps significantly (>50%)
+    with any already-selected segments.
+    """
+    selected = []
+    for seg in segments:
+        if len(selected) >= max_count:
+            break
+        
+        s_c = max(0, seg["start"] - padding)
+        e_c = seg["start"] + seg["duration"] + padding
+        d_c = e_c - s_c
+        
+        if d_c <= 0:
+            continue
+            
+        is_overlapping = False
+        for sel in selected:
+            s_p = max(0, sel["start"] - padding)
+            e_p = sel["start"] + sel["duration"] + padding
+            
+            overlap = max(0, min(e_c, e_p) - max(s_c, s_p))
+            if overlap > 0.5 * d_c:
+                is_overlapping = True
+                break
+                
+        if not is_overlapping:
+            selected.append(seg)
+            
+    return selected
 
 def ffmpeg_tersedia():
     return bool(shutil.which("ffmpeg"))
@@ -91,7 +231,7 @@ def parse_args():
     parser.add_argument("--url", help="YouTube URL (watch/shorts/youtu.be)")
     parser.add_argument(
         "--crop",
-        choices=["default", "split_left", "split_right"],
+        choices=["default", "split_left", "split_right", "smart"],
         help="Crop mode",
     )
     parser.add_argument(
@@ -103,8 +243,8 @@ def parse_args():
         "--subtitle-lang",
         dest="subtitle_lang",
         choices=["id", "en"],
-        default="id",
-        help="Subtitle language (id or en, default: id)",
+        default="en",
+        help="Subtitle language (id or en, default: en)",
     )
     parser.add_argument("--whisper-model", dest="whisper_model", help="Faster-Whisper model")
     parser.add_argument("--subtitle-font", dest="subtitle_font", help="Subtitle font name (e.g., Poppins)")
@@ -257,6 +397,8 @@ def cek_dependensi(install_whisper=False, fatal=True):
             sys.exit(1)
         return False
     return True
+
+
 def ambil_metadata_dan_heatmap(video_id):
     """
     Fetch all video metadata, duration, and heatmap data in a single yt-dlp call.
@@ -273,24 +415,13 @@ def ambil_metadata_dan_heatmap(video_id):
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         raw = json.loads(res.stdout)
         
-        # Parse heatmap
+        # Parse and process heatmap
         heatmap_raw = raw.get("heatmap") or []
-        heatmap_data = []
-        for marker in heatmap_raw:
-            try:
-                start = float(marker.get("start_time", 0))
-                end = float(marker.get("end_time", 0))
-                value = float(marker.get("value", 0))
-                if value >= MIN_SCORE:
-                    heatmap_data.append({
-                        "start": start,
-                        "duration": min(end - start, MAX_DURATION),
-                        "score": value
-                    })
-            except Exception:
-                continue
-                
-        heatmap_data.sort(key=lambda x: x["score"], reverse=True)
+        spiked_segments = detect_viral_spikes(heatmap_raw)
+        merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0)
+        
+        # Sort by score descending (select_non_overlapping requires sorted candidates)
+        heatmap_data = sorted(merged_segments, key=lambda x: x["score"], reverse=True)
         
         duration = int(raw.get("duration") or 3600)
         title = raw.get("title") or "Video"
@@ -394,7 +525,7 @@ def ambil_most_replayed(video_id):
     except Exception:
         return []
 
-    results = []
+    raw_markers = []
 
     for marker in markers:
         if "heatMarkerRenderer" in marker:
@@ -402,20 +533,21 @@ def ambil_most_replayed(video_id):
 
         try:
             score = float(marker.get("intensityScoreNormalized", 0))
-            if score >= MIN_SCORE:
-                results.append({
-                    "start": float(marker["startMillis"]) / 1000,
-                    "duration": min(
-                        float(marker["durationMillis"]) / 1000,
-                        MAX_DURATION
-                    ),
-                    "score": score
-                })
+            start = float(marker["startMillis"]) / 1000
+            dur = float(marker["durationMillis"]) / 1000
+            raw_markers.append({
+                "start_time": start,
+                "end_time": start + dur,
+                "value": score
+            })
         except Exception:
             continue
 
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
+    # Process using our helpers:
+    spiked_segments = detect_viral_spikes(raw_markers)
+    merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0)
+    merged_segments.sort(key=lambda x: x["score"], reverse=True)
+    return merged_segments
 
 
 def get_duration(video_id):
@@ -551,8 +683,233 @@ def get_best_encoder():
     return _detected_encoder_cache
 
 
+def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, config=None):
+    """
+    Perform Auto Face Tracking Smart Crop 9:16 using OpenCV.
+    Decodes the input video frame-by-frame, tracks the presenter's face,
+    calculates a smooth bounding box center, crops, resizes to out_width x out_height,
+    and encodes the output video (silent).
+    """
+    if cv2 is None:
+        raise RuntimeError("OpenCV (opencv-python) tidak terinstall. Silakan jalankan 'pip install opencv-python'.")
 
-def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default", use_subtitle=False, event_hook=None, stream_urls=None, local_video_path=None, subtitle_lang="id"):
+    # Load Cascade Classifier
+    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+    if face_cascade.empty():
+        # Fallback to local cascade
+        if os.path.exists("haarcascade_frontalface_default.xml"):
+            face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+        else:
+            raise RuntimeError("Haar Cascade XML tidak ditemukan. Pastikan cv2.data.haarcascades tersedia.")
+
+    # Parse config
+    if config is None:
+        config = {}
+    smooth_factor = float(config.get("smooth_factor", 0.10))
+    deadzone_size = float(config.get("deadzone_size", 0.15))
+    tracking_speed = int(config.get("tracking_speed", 15))
+    relock_timeout = int(config.get("relock_timeout", 30))
+    crop_padding = float(config.get("crop_padding", 0.10))
+
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Gagal membuka video input: {input_path}")
+
+    # Video specs
+    w_orig = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h_orig = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 30.0
+
+    # Calculate crop height and width based on crop_padding and target aspect ratio (9:16)
+    # The default vertical crop height (when crop_padding=0) is h_orig.
+    # When crop_padding > 0, we zoom in, so h_crop = h_orig * (1 - crop_padding).
+    h_crop = int(h_orig * (1.0 - crop_padding))
+    w_crop = int(h_crop * (9 / 16))
+    
+    # If the computed width is wider than the original video width, scale down both
+    if w_crop > w_orig:
+        w_crop = w_orig
+        h_crop = int(w_orig * (16 / 9))
+    
+    # Keep sizes even for video writing
+    if w_crop % 2 != 0:
+        w_crop -= 1
+    if h_crop % 2 != 0:
+        h_crop -= 1
+        
+    # Ensure crop size is at least 100x100
+    w_crop = max(100, w_crop)
+    h_crop = max(100, h_crop)
+
+    # Initialize crop window center
+    current_cx = w_orig / 2.0
+    current_cy = h_orig / 2.0
+
+    # Tracking state
+    tracking_active = False
+    tracker = None
+    lost_frames_count = 0
+    last_face_bbox = None  # (x, y, w, h)
+
+    def create_tracker():
+        try:
+            return cv2.TrackerKCF_create()
+        except AttributeError:
+            try:
+                return cv2.legacy.TrackerKCF_create()
+            except AttributeError:
+                return None
+
+    # Video Writer
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(output_path, fourcc, fps, (out_width, out_height))
+    if not out.isOpened():
+        fourcc = cv2.VideoWriter_fourcc(*"XVID")
+        out = cv2.VideoWriter(output_path, fourcc, fps, (out_width, out_height))
+
+    frame_idx = 0
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame_idx += 1
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            face_found = False
+            face_x, face_y, face_w, face_h = 0, 0, 0, 0
+
+            # 1. Update Tracker if active
+            if tracking_active and tracker is not None:
+                ok, bbox = tracker.update(frame)
+                if ok:
+                    tx, ty, tw, th = [int(v) for v in bbox]
+                    # Check if tracker bbox is reasonable and intersects with frame
+                    if tw > 10 and th > 10 and tx + tw > 0 and ty + th > 0 and tx < w_orig and ty < h_orig:
+                        face_x, face_y, face_w, face_h = tx, ty, tw, th
+                        face_found = True
+                        lost_frames_count = 0
+                        last_face_bbox = (face_x, face_y, face_w, face_h)
+                
+                if not face_found:
+                    tracking_active = False
+                    tracker = None
+
+            # 2. Run face detection if tracker is not active
+            if not face_found:
+                scale_ratio = 1.0
+                if gray.shape[0] > 360:
+                    scale_ratio = 360.0 / gray.shape[0]
+                    small_gray = cv2.resize(gray, (0,0), fx=scale_ratio, fy=scale_ratio)
+                else:
+                    small_gray = gray
+
+                # Detect faces
+                faces = face_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                
+                if len(faces) > 0:
+                    best_face = max(faces, key=lambda f: f[2] * f[3])
+                    face_x = int(best_face[0] / scale_ratio)
+                    face_y = int(best_face[1] / scale_ratio)
+                    face_w = int(best_face[2] / scale_ratio)
+                    face_h = int(best_face[3] / scale_ratio)
+                    
+                    # Clamp to frame boundaries
+                    face_x = max(0, min(w_orig - 1, face_x))
+                    face_y = max(0, min(h_orig - 1, face_y))
+                    face_w = max(10, min(w_orig - face_x, face_w))
+                    face_h = max(10, min(h_orig - face_y, face_h))
+                    
+                    face_found = True
+                    lost_frames_count = 0
+                    last_face_bbox = (face_x, face_y, face_w, face_h)
+                    
+                    tracker = create_tracker()
+                    if tracker is not None:
+                        try:
+                            tracker.init(frame, (face_x, face_y, face_w, face_h))
+                            tracking_active = True
+                        except Exception:
+                            tracker = None
+                            tracking_active = False
+
+            # 3. Calculate target center
+            if face_found:
+                target_cx = face_x + face_w / 2.0
+                target_cy = face_y + face_h / 2.0
+            elif last_face_bbox is not None and lost_frames_count < relock_timeout:
+                lost_frames_count += 1
+                target_cx = last_face_bbox[0] + last_face_bbox[2] / 2.0
+                target_cy = last_face_bbox[1] + last_face_bbox[3] / 2.0
+            else:
+                # Default to middle of the original screen
+                target_cx = w_orig / 2.0
+                target_cy = h_orig / 2.0
+
+            # 4. Apply Deadzone
+            # The deadzone is defined relative to the crop window size
+            deadzone_w = w_crop * deadzone_size
+            deadzone_h = h_crop * deadzone_size
+            
+            # X Deadzone check
+            diff_x = target_cx - current_cx
+            if abs(diff_x) > deadzone_w / 2.0:
+                if diff_x > 0:
+                    target_move_x = target_cx - deadzone_w / 2.0
+                else:
+                    target_move_x = target_cx + deadzone_w / 2.0
+            else:
+                target_move_x = current_cx
+
+            # Y Deadzone check
+            diff_y = target_cy - current_cy
+            if abs(diff_y) > deadzone_h / 2.0:
+                if diff_y > 0:
+                    target_move_y = target_cy - deadzone_h / 2.0
+                else:
+                    target_move_y = target_cy + deadzone_h / 2.0
+            else:
+                target_move_y = current_cy
+
+            # 5. LERP smoothing
+            smooth_cx = current_cx + (target_move_x - current_cx) * smooth_factor
+            smooth_cy = current_cy + (target_move_y - current_cy) * smooth_factor
+
+            # 6. Tracking speed constraint (maximum shift per frame)
+            movement_x = smooth_cx - current_cx
+            if abs(movement_x) > tracking_speed:
+                movement_x = max(-tracking_speed, min(tracking_speed, movement_x))
+            smooth_cx = current_cx + movement_x
+
+            movement_y = smooth_cy - current_cy
+            if abs(movement_y) > tracking_speed:
+                movement_y = max(-tracking_speed, min(tracking_speed, movement_y))
+            smooth_cy = current_cy + movement_y
+
+            # 7. Clamp to boundaries (avoid crop going out of bounds)
+            left = int(smooth_cx - w_crop / 2.0)
+            left = max(0, min(w_orig - w_crop, left))
+            current_cx = left + w_crop / 2.0
+
+            top = int(smooth_cy - h_crop / 2.0)
+            top = max(0, min(h_orig - h_crop, top))
+            current_cy = top + h_crop / 2.0
+
+            # 8. Crop and Resize
+            cropped = frame[top:top+h_crop, left:left+w_crop]
+            resized = cv2.resize(cropped, (out_width, out_height))
+            out.write(resized)
+    finally:
+        cap.release()
+        out.release()
+
+
+
+def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default", use_subtitle=False, event_hook=None, stream_urls=None, local_video_path=None, subtitle_lang="en", output_ratio=None, out_w=None, out_h=None, output_dir=None, job_id=None, smart_config=None):
     """
     Download, crop, and export a single vertical clip
     based on a heatmap segment.
@@ -564,6 +921,14 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
         local_video_path: optional path to the locally downloaded full video file for instant slicing
         subtitle_lang: optional language code for the subtitle transcription (e.g., "id", "en")
     """
+    if smart_config is None:
+        smart_config = {
+            "smooth_factor": 0.10,
+            "deadzone_size": 0.15,
+            "tracking_speed": 15,
+            "relock_timeout": 30,
+            "crop_padding": 0.10
+        }
     start_original = item["start"]
     end_original = item["start"] + item["duration"]
 
@@ -573,9 +938,13 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
     if end - start < 3:
         return False
 
-    temp_file = f"temp_{index}.mkv"
-    subtitle_file = f"temp_{index}.srt"
-    output_file = os.path.join(OUTPUT_DIR, f"clip_{index}.mp4")
+    local_output_dir = output_dir if output_dir is not None else OUTPUT_DIR
+    temp_file = os.path.join(local_output_dir, f"temp_{video_id}_{index}.mkv")
+    subtitle_file = os.path.join(local_output_dir, f"temp_{video_id}_{index}.srt")
+    if job_id:
+        output_file = os.path.join(local_output_dir, f"clip_{job_id}_{index}.mp4")
+    else:
+        output_file = os.path.join(local_output_dir, f"clip_{index}.mp4")
 
     print(
         f"[Clip {index}] Processing segment "
@@ -687,7 +1056,27 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
             else:
                 print("  Subtitle generation failed, continuing without subtitle...")
 
-        out_w, out_h = OUT_WIDTH, OUT_HEIGHT
+        # Resolve aspect ratio width/height locally or fall back to globals
+        if out_w is not None or out_h is not None or output_ratio == "original":
+            local_out_w = out_w
+            local_out_h = out_h
+            local_output_ratio = output_ratio
+        elif output_ratio is not None:
+            local_output_ratio = output_ratio
+            if output_ratio == "9:16":
+                local_out_w, local_out_h = 720, 1280
+            elif output_ratio == "1:1":
+                local_out_w, local_out_h = 720, 720
+            elif output_ratio == "16:9":
+                local_out_w, local_out_h = 1280, 720
+            elif output_ratio == "original":
+                local_out_w, local_out_h = None, None
+            else:
+                raise ValueError(f"Invalid ratio: {output_ratio}")
+        else:
+            local_output_ratio = OUTPUT_RATIO
+            local_out_w = OUT_WIDTH
+            local_out_h = OUT_HEIGHT
         
         # Prepare subtitle filter if generated
         sub_vf = ""
@@ -702,7 +1091,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
 
         # Determine crop mode and combine with subtitle filter in a single encoding step
         if crop_mode == "default":
-            if OUTPUT_RATIO == "original":
+            if local_output_ratio == "original":
                 vf = sub_vf
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
@@ -713,7 +1102,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     output_file
                 ]
             else:
-                vf = build_cover_scale_crop_vf(out_w, out_h)
+                vf = build_cover_scale_crop_vf(local_out_w, local_out_h)
                 if sub_vf:
                     vf = f"{vf},{sub_vf}"
                 cmd_crop = [
@@ -724,9 +1113,47 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     "-c:a", "aac", "-b:a", "128k",
                     output_file
                 ]
+        elif crop_mode == "smart":
+            # Smart Crop: Face Tracking mode
+            temp_cropped_silent = os.path.join(local_output_dir, f"temp_smart_{video_id}_{index}.mp4")
+            
+            w_target = local_out_w if local_out_w else 720
+            h_target = local_out_h if local_out_h else 1280
+            
+            if callable(event_hook):
+                try:
+                    event_hook("stage", {"stage": "crop", "clip_index": index})
+                except Exception:
+                    pass
+                    
+            print("  Running Auto Face Tracking Smart Crop...")
+            smart_crop_video(temp_file, temp_cropped_silent, w_target, h_target, smart_config)
+            
+            # Setup FFmpeg to merge audio and burn subtitles
+            if sub_vf:
+                cmd_crop = [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-i", temp_cropped_silent,
+                    "-i", temp_file,
+                    "-map", "0:v", "-map", "1:a?",
+                    "-vf", sub_vf,
+                ] + get_best_encoder() + [
+                    "-c:a", "aac", "-b:a", "128k",
+                    output_file
+                ]
+            else:
+                cmd_crop = [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-i", temp_cropped_silent,
+                    "-i", temp_file,
+                    "-map", "0:v", "-map", "1:a?",
+                ] + get_best_encoder() + [
+                    "-c:a", "aac", "-b:a", "128k",
+                    output_file
+                ]
         elif crop_mode in ("split_left", "split_right"):
-            if OUTPUT_RATIO == "original" or not out_w or not out_h or out_h < out_w:
-                vf = build_cover_scale_crop_vf(out_w or 720, out_h or 1280) if OUTPUT_RATIO != "original" else ""
+            if local_output_ratio == "original" or not local_out_w or not local_out_h or local_out_h < local_out_w:
+                vf = build_cover_scale_crop_vf(local_out_w or 720, local_out_h or 1280) if local_output_ratio != "original" else ""
                 if sub_vf:
                     vf = f"{vf},{sub_vf}" if vf else sub_vf
                 cmd_crop = [
@@ -738,16 +1165,16 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     output_file
                 ]
             else:
-                top_h, bottom_h = get_split_heights(out_h)
-                scaled = build_cover_scale_vf(out_w, out_h)
-                facecam_x = "0" if crop_mode == "split_left" else f"iw-{out_w}"
+                top_h, bottom_h = get_split_heights(local_out_h)
+                scaled = build_cover_scale_vf(local_out_w, local_out_h)
+                facecam_x = "0" if crop_mode == "split_left" else f"iw-{local_out_w}"
                 
                 if sub_vf:
                     vf = (
                         f"{scaled}[scaled];"
                         f"[scaled]split=2[s1][s2];"
-                        f"[s1]crop={out_w}:{top_h}:(iw-{out_w})/2:(ih-{out_h})/2[top];"
-                        f"[s2]crop={out_w}:{bottom_h}:{facecam_x}:ih-{bottom_h}[bottom];"
+                        f"[s1]crop={local_out_w}:{top_h}:(iw-{local_out_w})/2:(ih-{local_out_h})/2[top];"
+                        f"[s2]crop={local_out_w}:{bottom_h}:{facecam_x}:ih-{bottom_h}[bottom];"
                         f"[top][bottom]vstack[vsplit];"
                         f"[vsplit]{sub_vf}[out]"
                     )
@@ -755,8 +1182,8 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     vf = (
                         f"{scaled}[scaled];"
                         f"[scaled]split=2[s1][s2];"
-                        f"[s1]crop={out_w}:{top_h}:(iw-{out_w})/2:(ih-{out_h})/2[top];"
-                        f"[s2]crop={out_w}:{bottom_h}:{facecam_x}:ih-{bottom_h}[bottom];"
+                        f"[s1]crop={local_out_w}:{top_h}:(iw-{local_out_w})/2:(ih-{local_out_h})/2[top];"
+                        f"[s2]crop={local_out_w}:{bottom_h}:{facecam_x}:ih-{bottom_h}[bottom];"
                         f"[top][bottom]vstack[out]"
                     )
                 
@@ -790,6 +1217,12 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
             os.remove(temp_file)
         if os.path.exists(subtitle_file):
             os.remove(subtitle_file)
+        temp_cropped_silent = os.path.join(local_output_dir, f"temp_smart_{video_id}_{index}.mp4")
+        if os.path.exists(temp_cropped_silent):
+            try:
+                os.remove(temp_cropped_silent)
+            except Exception:
+                pass
 
         print("Clip successfully generated.")
         if callable(event_hook):
@@ -800,7 +1233,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
         return True
 
     except subprocess.CalledProcessError as e:
-        for f in [temp_file, subtitle_file]:
+        for f in [temp_file, subtitle_file, os.path.join(local_output_dir, f"temp_smart_{video_id}_{index}.mp4")]:
             if os.path.exists(f):
                 try:
                     os.remove(f)
@@ -810,7 +1243,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
         print(f"Error details: {e.stderr if e.stderr else e.stdout}")
         return False
     except Exception as e:
-        for f in [temp_file, subtitle_file]:
+        for f in [temp_file, subtitle_file, os.path.join(local_output_dir, f"temp_smart_{video_id}_{index}.mp4")]:
             if os.path.exists(f):
                 try:
                     os.remove(f)
@@ -861,6 +1294,7 @@ def main():
             "default": "Default center crop",
             "split_left": "Split crop (bottom-left facecam)",
             "split_right": "Split crop (bottom-right facecam)",
+            "smart": "Smart crop (face tracking)",
         }[crop_mode]
 
     subtitle_choice = args.subtitle
@@ -878,9 +1312,10 @@ def main():
         print("1. Default (center crop)")
         print("2. Split 1 (top: center, bottom: bottom-left (facecam))")
         print("3. Split 2 (top: center, bottom: bottom-right ((facecam))")
+        print("4. Smart Crop (auto face tracking)")
 
         while crop_mode is None:
-            choice = input("\nSelect crop mode (1-3): ").strip()
+            choice = input("\nSelect crop mode (1-4): ").strip()
             if choice == "1":
                 crop_mode = "default"
                 crop_desc = "Default center crop"
@@ -893,7 +1328,11 @@ def main():
                 crop_mode = "split_right"
                 crop_desc = "Split crop (bottom-right facecam)"
                 break
-            print("Invalid choice. Please enter 1, 2, or 3.")
+            if choice == "4":
+                crop_mode = "smart"
+                crop_desc = "Smart crop (face tracking)"
+                break
+            print("Invalid choice. Please enter 1, 2, 3, or 4.")
 
         print(f"Selected: {crop_desc}")
 
@@ -910,8 +1349,8 @@ def main():
 
         if use_subtitle:
             print(f"✅ Subtitle enabled (Model: {WHISPER_MODEL})")
-            lang_choice = input("Select subtitle language (id/en) [default: id]: ").strip().lower()
-            subtitle_lang = "en" if lang_choice == "en" else "id"
+            lang_choice = input("Select subtitle language (id/en) [default: en]: ").strip().lower()
+            subtitle_lang = "id" if lang_choice == "id" else "en"
             print(f"   Language: {subtitle_lang}")
         else:
             print("❌ Subtitle disabled")
@@ -971,7 +1410,7 @@ def main():
     print(f"Using crop mode: {crop_desc}")
 
     max_clips_val = args.max_clips if getattr(args, "max_clips", None) else MAX_CLIPS
-    targets = heatmap_data[:max_clips_val]
+    targets = select_non_overlapping(heatmap_data, max_clips_val, PADDING)
     success_count = 0
 
     workers = getattr(args, "workers", 0)
