@@ -87,6 +87,31 @@
           </div>
         </div>
 
+        <div id="heatmapSettingsBox" style="margin-top: 12px; margin-bottom: 16px; border: 1px solid var(--line); padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.02);">
+          <div class="panelTitle" style="font-size: 14px; margin-bottom: 8px; font-weight: bold; color: var(--fg);">Viral & Heatmap Settings</div>
+          <div class="grid2">
+            <div class="row">
+              <label class="label">Viral Sensitivity (Sensitivitas Viral)</label>
+              <select id="viral_sensitivity" class="input">
+                <option value="low">Low (Hanya Spikes Besar)</option>
+                <option value="medium" selected>Medium (Standard / Seimbang)</option>
+                <option value="high">High (Agresif Viral / Ambil Banyak Momen)</option>
+              </select>
+              <div class="help">Makin tinggi sensitivitas, makin agresif program mendeteksi bagian viral.</div>
+            </div>
+            <div class="row">
+              <label class="label">Duplicate Filter Rule (Aturan Duplikat)</label>
+              <select id="duplicate_mode" class="input">
+                <option value="strict" selected>Strict (0% Overlap - Bebas Duplikat)</option>
+                <option value="moderate">Moderate (Maks 25% Overlap)</option>
+                <option value="loose">Loose (Maks 50% Overlap)</option>
+                <option value="none">No Filter (Bebas / Boleh Tumpang Tindih)</option>
+              </select>
+              <div class="help">Aturan seberapa ketat toleransi durasi yang tumpang tindih antar clip.</div>
+            </div>
+          </div>
+        </div>
+
         <div class="grid3">
           <div class="row">
             <label class="label" data-i18n="label.crop">Crop</label>

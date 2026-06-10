@@ -114,6 +114,24 @@ def run_job(job_id, payload):
             "crop_padding": float(payload.get("smart_crop_padding") or 0.10)
         }
 
+        # Read viral sensitivity and overlap threshold
+        viral_sensitivity = payload.get("viral_sensitivity") or "medium"
+        duplicate_mode = payload.get("duplicate_mode") or "strict"
+        
+        min_score = 0.20
+        if viral_sensitivity == "high":
+            min_score = 0.10
+        elif viral_sensitivity == "low":
+            min_score = 0.30
+            
+        overlap_threshold = 0.0
+        if duplicate_mode == "moderate":
+            overlap_threshold = 0.25
+        elif duplicate_mode == "loose":
+            overlap_threshold = 0.50
+        elif duplicate_mode == "none":
+            overlap_threshold = 1.0
+
         core.WHISPER_MODEL = whisper_model
         core.SUBTITLE_FONT = subtitle_font
         core.SUBTITLE_FONTS_DIR = subtitle_fontsdir
@@ -137,12 +155,12 @@ def run_job(job_id, payload):
             raise ValueError("URL YouTube invalid")
 
         add_log(job_id, "Fetching video metadata and heatmap info...")
-        meta = core.ambil_metadata_dan_heatmap(video_id)
+        meta = core.ambil_metadata_dan_heatmap(video_id, min_score=min_score)
         if meta:
             targets_heatmap = meta["heatmap"]
             total_duration = meta["duration"]
         else:
-            targets_heatmap = core.ambil_most_replayed(video_id)
+            targets_heatmap = core.ambil_most_replayed(video_id, min_score=min_score)
             total_duration = core.get_duration(video_id)
 
         targets = []
@@ -161,7 +179,7 @@ def run_job(job_id, payload):
                 targets.append({"start": start, "duration": dur, "score": score})
             if not targets:
                 raise ValueError("Segment pilihan invalid")
-            targets = core.select_non_overlapping(targets, len(targets), padding)
+            targets = core.select_non_overlapping(targets, len(targets), padding, overlap_threshold=overlap_threshold)
         elif mode == "custom":
             custom_segs = payload.get("custom_segments")
             if isinstance(custom_segs, list) and len(custom_segs) > 0:
@@ -185,7 +203,7 @@ def run_job(job_id, payload):
         else:
             if not targets_heatmap:
                 raise RuntimeError("Tidak ada heatmap/Most Replayed data")
-            targets = core.select_non_overlapping(targets_heatmap, max(1, max_clips or 10), padding)
+            targets = core.select_non_overlapping(targets_heatmap, max(1, max_clips or 10), padding, overlap_threshold=overlap_threshold)
 
         set_job(job_id, total=len(targets), done=0, status_text="processing")
 
@@ -340,6 +358,24 @@ def api_scan():
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     padding = safe_int(data.get("padding"), 10)
+    
+    viral_sensitivity = data.get("viral_sensitivity") or "medium"
+    duplicate_mode = data.get("duplicate_mode") or "strict"
+    
+    min_score = 0.20
+    if viral_sensitivity == "high":
+        min_score = 0.10
+    elif viral_sensitivity == "low":
+        min_score = 0.30
+        
+    overlap_threshold = 0.0
+    if duplicate_mode == "moderate":
+        overlap_threshold = 0.25
+    elif duplicate_mode == "loose":
+        overlap_threshold = 0.50
+    elif duplicate_mode == "none":
+        overlap_threshold = 1.0
+
     video_id = core.extract_video_id(url)
     if not video_id:
         return jsonify({"ok": False, "error": "URL YouTube invalid"}), 400
@@ -349,8 +385,8 @@ def api_scan():
     if not ok:
         return jsonify({"ok": False, "error": "FFmpeg tidak ketemu"}), 400
 
-    segments = core.ambil_most_replayed(video_id)
-    segments = core.select_non_overlapping(segments, 100, padding)
+    segments = core.ambil_most_replayed(video_id, min_score=min_score)
+    segments = core.select_non_overlapping(segments, 100, padding, overlap_threshold=overlap_threshold)
     segments.sort(key=lambda x: float(x.get("start", 0)))
     total = core.get_duration(video_id)
     return jsonify({"ok": True, "video_id": video_id, "duration": total, "segments": segments})

@@ -385,7 +385,9 @@ function readPayload() {
     smart_deadzone_size: Number($("smart_deadzone_size")?.value || 0.15),
     smart_tracking_speed: Number($("smart_tracking_speed")?.value || 15),
     smart_relock_timeout: Number($("smart_relock_timeout")?.value || 30),
-    smart_crop_padding: Number($("smart_crop_padding")?.value || 0.10)
+    smart_crop_padding: Number($("smart_crop_padding")?.value || 0.10),
+    viral_sensitivity: $("viral_sensitivity")?.value || "medium",
+    duplicate_mode: $("duplicate_mode")?.value || "strict"
   };
 }
 
@@ -623,7 +625,12 @@ async function scan() {
   setBusy(true);
   try {
     const payload = readPayload();
-    const data = await postJson("/api/scan", { url: payload.url, padding: payload.padding });
+    const data = await postJson("/api/scan", {
+      url: payload.url,
+      padding: payload.padding,
+      viral_sensitivity: payload.viral_sensitivity,
+      duplicate_mode: payload.duplicate_mode
+    });
     lastScanSegments = data.segments || [];
     selectedKeys = new Set();
     currentVideoId = data.video_id || currentVideoId;
@@ -738,6 +745,7 @@ function toggleMode() {
   const isCustom = $("mode").value === "custom";
   $("customBox").classList.toggle("hide", !isCustom);
   $("scanBtn").classList.toggle("hide", isCustom);
+  $("heatmapSettingsBox")?.classList.toggle("hide", isCustom);
   if (isCustom) {
     setSegControlsVisible(false);
     $("segSelectedMeta").textContent = "";

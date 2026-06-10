@@ -72,7 +72,7 @@ def get_ratio_dimensions(preset):
         return None, None
     raise ValueError("Invalid ratio preset")
 
-def detect_viral_spikes(heatmap_raw):
+def detect_viral_spikes(heatmap_raw, min_score=0.20):
     """
     Identify segments in the raw heatmap that show sharp intensity increases (spikes)
     above the local average. Enhance their scores by weighting both raw intensity
@@ -120,7 +120,7 @@ def detect_viral_spikes(heatmap_raw):
             # Final score weighting
             final_score = 0.6 * val + 0.4 * spike_magnitude
             
-            if final_score >= MIN_SCORE:
+            if final_score >= min_score:
                 enhanced_segments.append({
                     "start": start,
                     "duration": min(end - start, MAX_DURATION),
@@ -163,11 +163,11 @@ def merge_adjacent_segments(segments, gap_limit=5.0):
     merged.append(current)
     return merged
 
-def select_non_overlapping(segments, max_count, padding):
+def select_non_overlapping(segments, max_count, padding, overlap_threshold=0.0):
     """
     Select up to max_count segments from a list of segments (sorted by score descending),
-    ensuring that no selected segment has a padded time range that overlaps at all
-    with any already-selected segments.
+    ensuring that no selected segment has a padded time range that overlaps beyond the
+    overlap_threshold (0.0 to 1.0) with any already-selected segments.
     """
     selected = []
     # Sort segments by score descending to prioritize high-value segments
@@ -201,9 +201,12 @@ def select_non_overlapping(segments, max_count, padding):
             s_p = max(0.0, sel_start - padding)
             e_p = sel_start + sel_dur + padding
             
-            # Check for any overlap between padded ranges
+            # Check for overlap between padded ranges
             overlap = max(0.0, min(e_c, e_p) - max(s_c, s_p))
-            if overlap > 0.0:
+            if overlap_threshold >= 1.0:
+                # No overlap filter at all
+                pass
+            elif overlap > overlap_threshold * d_c:
                 is_overlapping = True
                 break
                 
@@ -415,7 +418,7 @@ def cek_dependensi(install_whisper=False, fatal=True):
     return True
 
 
-def ambil_metadata_dan_heatmap(video_id):
+def ambil_metadata_dan_heatmap(video_id, min_score=0.20):
     """
     Fetch all video metadata, duration, and heatmap data in a single yt-dlp call.
     """
@@ -433,7 +436,7 @@ def ambil_metadata_dan_heatmap(video_id):
         
         # Parse and process heatmap
         heatmap_raw = raw.get("heatmap") or []
-        spiked_segments = detect_viral_spikes(heatmap_raw)
+        spiked_segments = detect_viral_spikes(heatmap_raw, min_score=min_score)
         merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0)
         
         # Sort by score descending (select_non_overlapping requires sorted candidates)
@@ -512,7 +515,7 @@ def unduh_video_penuh(video_id, output_path):
             return False
 
 
-def ambil_most_replayed(video_id):
+def ambil_most_replayed(video_id, min_score=0.20):
     """
     Fetch and parse YouTube 'Most Replayed' heatmap data.
     Returns a list of high-engagement segments.
@@ -560,7 +563,7 @@ def ambil_most_replayed(video_id):
             continue
 
     # Process using our helpers:
-    spiked_segments = detect_viral_spikes(raw_markers)
+    spiked_segments = detect_viral_spikes(raw_markers, min_score=min_score)
     merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0)
     merged_segments.sort(key=lambda x: x["score"], reverse=True)
     return merged_segments
