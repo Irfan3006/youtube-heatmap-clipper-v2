@@ -161,6 +161,7 @@ def run_job(job_id, payload):
                 targets.append({"start": start, "duration": dur, "score": score})
             if not targets:
                 raise ValueError("Segment pilihan invalid")
+            targets = core.select_non_overlapping(targets, len(targets), padding)
         elif mode == "custom":
             custom_segs = payload.get("custom_segments")
             if isinstance(custom_segs, list) and len(custom_segs) > 0:
@@ -338,6 +339,7 @@ def api_preview():
 def api_scan():
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
+    padding = safe_int(data.get("padding"), 10)
     video_id = core.extract_video_id(url)
     if not video_id:
         return jsonify({"ok": False, "error": "URL YouTube invalid"}), 400
@@ -348,6 +350,8 @@ def api_scan():
         return jsonify({"ok": False, "error": "FFmpeg tidak ketemu"}), 400
 
     segments = core.ambil_most_replayed(video_id)
+    segments = core.select_non_overlapping(segments, 100, padding)
+    segments.sort(key=lambda x: float(x.get("start", 0)))
     total = core.get_duration(video_id)
     return jsonify({"ok": True, "video_id": video_id, "duration": total, "segments": segments})
 

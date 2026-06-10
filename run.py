@@ -166,16 +166,25 @@ def merge_adjacent_segments(segments, gap_limit=5.0):
 def select_non_overlapping(segments, max_count, padding):
     """
     Select up to max_count segments from a list of segments (sorted by score descending),
-    ensuring that no selected segment has a padded time range that overlaps significantly (>50%)
+    ensuring that no selected segment has a padded time range that overlaps at all
     with any already-selected segments.
     """
     selected = []
-    for seg in segments:
+    # Sort segments by score descending to prioritize high-value segments
+    sorted_segs = sorted(segments, key=lambda x: float(x.get("score", 0.0) or 0.0), reverse=True)
+    
+    for seg in sorted_segs:
         if len(selected) >= max_count:
             break
         
-        s_c = max(0, seg["start"] - padding)
-        e_c = seg["start"] + seg["duration"] + padding
+        try:
+            start_val = float(seg.get("start", 0))
+            dur_val = float(seg.get("duration", 0))
+        except Exception:
+            continue
+            
+        s_c = max(0.0, start_val - padding)
+        e_c = start_val + dur_val + padding
         d_c = e_c - s_c
         
         if d_c <= 0:
@@ -183,11 +192,18 @@ def select_non_overlapping(segments, max_count, padding):
             
         is_overlapping = False
         for sel in selected:
-            s_p = max(0, sel["start"] - padding)
-            e_p = sel["start"] + sel["duration"] + padding
+            try:
+                sel_start = float(sel.get("start", 0))
+                sel_dur = float(sel.get("duration", 0))
+            except Exception:
+                continue
+                
+            s_p = max(0.0, sel_start - padding)
+            e_p = sel_start + sel_dur + padding
             
-            overlap = max(0, min(e_c, e_p) - max(s_c, s_p))
-            if overlap > 0.5 * d_c:
+            # Check for any overlap between padded ranges
+            overlap = max(0.0, min(e_c, e_p) - max(s_c, s_p))
+            if overlap > 0.0:
                 is_overlapping = True
                 break
                 
@@ -685,23 +701,27 @@ def get_best_encoder():
 
 def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, config=None):
     """
-    Perform Auto Face Tracking Smart Crop 9:16 using OpenCV.
-    Decodes the input video frame-by-frame, tracks the presenter's face,
-    calculates a smooth bounding box center, crops, resizes to out_width x out_height,
-    and encodes the output video (silent).
+    Perform Auto Face Tracking Smart Crop using OpenCV.
+    Decodes the input video frame-by-frame, tracks the presenter's face using a hybrid
+    ROI frontal/profile face detection logic, calculates a smooth bounding box center,
+    crops, resizes to out_width x out_height, and encodes the output video (silent).
     """
     if cv2 is None:
         raise RuntimeError("OpenCV (opencv-python) tidak terinstall. Silakan jalankan 'pip install opencv-python'.")
 
-    # Load Cascade Classifier
+    # Load Cascade Classifiers
     cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     face_cascade = cv2.CascadeClassifier(cascade_path)
     if face_cascade.empty():
-        # Fallback to local cascade
         if os.path.exists("haarcascade_frontalface_default.xml"):
             face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
         else:
-            raise RuntimeError("Haar Cascade XML tidak ditemukan. Pastikan cv2.data.haarcascades tersedia.")
+            raise RuntimeError("Haar Cascade Frontal Face XML tidak ditemukan.")
+
+    profile_cascade_path = cv2.data.haarcascades + "haarcascade_profileface.xml"
+    profile_cascade = cv2.CascadeClassifier(profile_cascade_path)
+    if profile_cascade.empty() and os.path.exists("haarcascade_profileface.xml"):
+        profile_cascade = cv2.CascadeClassifier("haarcascade_profileface.xml")
 
     # Parse config
     if config is None:
@@ -723,45 +743,35 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
     if fps <= 0:
         fps = 30.0
 
-    # Calculate crop height and width based on crop_padding and target aspect ratio (9:16)
-    # The default vertical crop height (when crop_padding=0) is h_orig.
-    # When crop_padding > 0, we zoom in, so h_crop = h_orig * (1 - crop_padding).
+    # Calculate dynamic aspect ratio and crop window size
+    aspect_ratio = out_width / out_height
     h_crop = int(h_orig * (1.0 - crop_padding))
-    w_crop = int(h_crop * (9 / 16))
+    w_crop = int(h_crop * aspect_ratio)
     
-    # If the computed width is wider than the original video width, scale down both
+    # Keep crop within original video bounds
     if w_crop > w_orig:
         w_crop = w_orig
-        h_crop = int(w_orig * (16 / 9))
+        h_crop = int(w_orig / aspect_ratio)
+    if h_crop > h_orig:
+        h_crop = h_orig
+        w_crop = int(h_orig * aspect_ratio)
     
-    # Keep sizes even for video writing
+    # Ensure crop dimensions are even (required by some encoders)
     if w_crop % 2 != 0:
         w_crop -= 1
     if h_crop % 2 != 0:
         h_crop -= 1
         
-    # Ensure crop size is at least 100x100
     w_crop = max(100, w_crop)
     h_crop = max(100, h_crop)
 
-    # Initialize crop window center
+    # Initialize crop window center at the middle of original screen
     current_cx = w_orig / 2.0
     current_cy = h_orig / 2.0
 
-    # Tracking state
-    tracking_active = False
-    tracker = None
+    # Tracking state (ROI-based tracking-by-detection)
+    last_face_bbox = None  # (x, y, w, h) in original resolution coordinates
     lost_frames_count = 0
-    last_face_bbox = None  # (x, y, w, h)
-
-    def create_tracker():
-        try:
-            return cv2.TrackerKCF_create()
-        except AttributeError:
-            try:
-                return cv2.legacy.TrackerKCF_create()
-            except AttributeError:
-                return None
 
     # Video Writer
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -770,92 +780,107 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
         fourcc = cv2.VideoWriter_fourcc(*"XVID")
         out = cv2.VideoWriter(output_path, fourcc, fps, (out_width, out_height))
 
-    frame_idx = 0
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            frame_idx += 1
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
             face_found = False
             face_x, face_y, face_w, face_h = 0, 0, 0, 0
 
-            # 1. Update Tracker if active
-            if tracking_active and tracker is not None:
-                ok, bbox = tracker.update(frame)
-                if ok:
-                    tx, ty, tw, th = [int(v) for v in bbox]
-                    # Check if tracker bbox is reasonable and intersects with frame
-                    if tw > 10 and th > 10 and tx + tw > 0 and ty + th > 0 and tx < w_orig and ty < h_orig:
-                        face_x, face_y, face_w, face_h = tx, ty, tw, th
-                        face_found = True
-                        lost_frames_count = 0
-                        last_face_bbox = (face_x, face_y, face_w, face_h)
+            # 1. Search in ROI around last known face location (faster & prevents drifting)
+            if last_face_bbox is not None:
+                lx, ly, lw, lh = last_face_bbox
+                # Define ROI expanded by 2.5x around the center
+                roi_w = int(lw * 2.5)
+                roi_h = int(lh * 2.5)
+                roi_x = int((lx + lw/2.0) - roi_w/2.0)
+                roi_y = int((ly + lh/2.0) - roi_h/2.0)
                 
-                if not face_found:
-                    tracking_active = False
-                    tracker = None
+                # Clamp ROI boundaries to frame
+                roi_x = max(0, min(w_orig - 50, roi_x))
+                roi_y = max(0, min(h_orig - 50, roi_y))
+                roi_w = max(50, min(w_orig - roi_x, roi_w))
+                roi_h = max(50, min(h_orig - roi_y, roi_h))
+                
+                gray_roi = gray[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
+                
+                # Detect frontal face in ROI
+                faces = face_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                
+                # Fallback to profile face in ROI if frontal face fails
+                if len(faces) == 0 and not profile_cascade.empty():
+                    faces = profile_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                
+                if len(faces) > 0:
+                    # Choose face closest to ROI center (the previous face position)
+                    roi_cx, roi_cy = roi_w / 2.0, roi_h / 2.0
+                    best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - roi_cx)**2 + (f[1]+f[3]/2.0 - roi_cy)**2)
+                    
+                    face_x = best_face[0] + roi_x
+                    face_y = best_face[1] + roi_y
+                    face_w = best_face[2]
+                    face_h = best_face[3]
+                    face_found = True
 
-            # 2. Run face detection if tracker is not active
+            # 2. Fallback to Full Frame face detection if not found in ROI (or first frame)
             if not face_found:
                 scale_ratio = 1.0
                 if gray.shape[0] > 360:
                     scale_ratio = 360.0 / gray.shape[0]
-                    small_gray = cv2.resize(gray, (0,0), fx=scale_ratio, fy=scale_ratio)
+                    small_gray = cv2.resize(gray, (0, 0), fx=scale_ratio, fy=scale_ratio)
                 else:
                     small_gray = gray
 
                 # Detect faces
                 faces = face_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                if len(faces) == 0 and not profile_cascade.empty():
+                    faces = profile_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
                 
                 if len(faces) > 0:
-                    best_face = max(faces, key=lambda f: f[2] * f[3])
+                    # Choose face closest to last known position if available, else the largest
+                    if last_face_bbox is not None:
+                        last_cx_small = (last_face_bbox[0] + last_face_bbox[2]/2.0) * scale_ratio
+                        last_cy_small = (last_face_bbox[1] + last_face_bbox[3]/2.0) * scale_ratio
+                        best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx_small)**2 + (f[1]+f[3]/2.0 - last_cy_small)**2)
+                    else:
+                        best_face = max(faces, key=lambda f: f[2] * f[3])
+                    
                     face_x = int(best_face[0] / scale_ratio)
                     face_y = int(best_face[1] / scale_ratio)
                     face_w = int(best_face[2] / scale_ratio)
                     face_h = int(best_face[3] / scale_ratio)
                     
-                    # Clamp to frame boundaries
+                    # Clamp to boundaries
                     face_x = max(0, min(w_orig - 1, face_x))
                     face_y = max(0, min(h_orig - 1, face_y))
                     face_w = max(10, min(w_orig - face_x, face_w))
                     face_h = max(10, min(h_orig - face_y, face_h))
                     
                     face_found = True
-                    lost_frames_count = 0
-                    last_face_bbox = (face_x, face_y, face_w, face_h)
-                    
-                    tracker = create_tracker()
-                    if tracker is not None:
-                        try:
-                            tracker.init(frame, (face_x, face_y, face_w, face_h))
-                            tracking_active = True
-                        except Exception:
-                            tracker = None
-                            tracking_active = False
 
-            # 3. Calculate target center
+            # 3. Calculate target center point
             if face_found:
                 target_cx = face_x + face_w / 2.0
                 target_cy = face_y + face_h / 2.0
+                last_face_bbox = (face_x, face_y, face_w, face_h)
+                lost_frames_count = 0
             elif last_face_bbox is not None and lost_frames_count < relock_timeout:
                 lost_frames_count += 1
                 target_cx = last_face_bbox[0] + last_face_bbox[2] / 2.0
                 target_cy = last_face_bbox[1] + last_face_bbox[3] / 2.0
             else:
-                # Default to middle of the original screen
+                # Default to middle of original video
                 target_cx = w_orig / 2.0
                 target_cy = h_orig / 2.0
+                last_face_bbox = None
 
             # 4. Apply Deadzone
-            # The deadzone is defined relative to the crop window size
             deadzone_w = w_crop * deadzone_size
             deadzone_h = h_crop * deadzone_size
             
-            # X Deadzone check
             diff_x = target_cx - current_cx
             if abs(diff_x) > deadzone_w / 2.0:
                 if diff_x > 0:
@@ -865,7 +890,6 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
             else:
                 target_move_x = current_cx
 
-            # Y Deadzone check
             diff_y = target_cy - current_cy
             if abs(diff_y) > deadzone_h / 2.0:
                 if diff_y > 0:

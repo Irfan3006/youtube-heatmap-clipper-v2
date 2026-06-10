@@ -491,7 +491,7 @@ select.input {
   width: 100%;
 }
 
-.bar>div {
+.bar .fill {
   height: 100%;
   width: 0%;
   background: linear-gradient(90deg, rgba(124, 58, 237, .9), rgba(236, 72, 153, .8));

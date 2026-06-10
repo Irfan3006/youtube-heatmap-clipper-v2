@@ -571,7 +571,7 @@ function renderProgress(job) {
   meta.textContent = `${job.status} • ${(job.status_text || "").trim()}${stage ? " • " + stage : ""}`.trim();
 
   const bar = document.createElement("div");
-  bar.innerHTML = `<div class="bar"><div style="width:${pct}%"></div><div class="pct">${pct}%</div></div>`;
+  bar.innerHTML = `<div class="bar"><div class="fill" style="width:${pct}%"></div><div class="pct">${pct}%</div></div>`;
   root.appendChild(bar);
 
   const line = document.createElement("div");
@@ -622,8 +622,8 @@ let selectedKeys = new Set();
 async function scan() {
   setBusy(true);
   try {
-    const { url } = readPayload();
-    const data = await postJson("/api/scan", { url });
+    const payload = readPayload();
+    const data = await postJson("/api/scan", { url: payload.url, padding: payload.padding });
     lastScanSegments = data.segments || [];
     selectedKeys = new Set();
     currentVideoId = data.video_id || currentVideoId;
