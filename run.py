@@ -6,6 +6,7 @@ import subprocess
 import requests
 import shutil
 from urllib.parse import urlparse, parse_qs
+from types import SimpleNamespace
 import argparse
 import warnings
 warnings.filterwarnings("ignore")
@@ -72,7 +73,7 @@ def get_ratio_dimensions(preset):
         return None, None
     raise ValueError("Invalid ratio preset")
 
-def detect_viral_spikes(heatmap_raw, min_score=0.20):
+def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
     """
     Identify segments in the raw heatmap that show sharp intensity increases (spikes)
     above the local average. Enhance their scores by weighting both raw intensity
@@ -121,9 +122,10 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20):
             final_score = 0.6 * val + 0.4 * spike_magnitude
             
             if final_score >= min_score:
+                duration_cap = max_duration if max_duration > 0 else 999999.0
                 enhanced_segments.append({
                     "start": start,
-                    "duration": min(end - start, MAX_DURATION),
+                    "duration": min(end - start, duration_cap),
                     "score": final_score
                 })
         except Exception:
@@ -131,10 +133,10 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20):
             
     return enhanced_segments
 
-def merge_adjacent_segments(segments, gap_limit=5.0):
+def merge_adjacent_segments(segments, gap_limit=5.0, max_duration=60):
     """
     Group consecutive/overlapping segments (within gap_limit seconds)
-    into a single segment. Capped at MAX_DURATION.
+    into a single segment. Capped at max_duration.
     """
     if not segments:
         return []
@@ -145,12 +147,13 @@ def merge_adjacent_segments(segments, gap_limit=5.0):
     merged = []
     current = sorted_segs[0].copy()
     
+    duration_cap = max_duration if max_duration > 0 else 999999.0
     for next_seg in sorted_segs[1:]:
         current_end = current["start"] + current["duration"]
         if next_seg["start"] <= current_end + gap_limit:
             next_end = next_seg["start"] + next_seg["duration"]
             new_end = max(current_end, next_end)
-            if new_end - current["start"] <= MAX_DURATION:
+            if new_end - current["start"] <= duration_cap:
                 current["duration"] = new_end - current["start"]
                 current["score"] = max(current["score"], next_seg["score"])
             else:
@@ -274,10 +277,18 @@ def parse_args():
         choices=["center", "bottom"],
         help="Subtitle placement: center or bottom",
     )
+    parser.add_argument(
+        "--subtitle-style",
+        dest="subtitle_style",
+        choices=["word_by_word", "phrase_by_phrase", "karaoke", "sentence", "line_by_line"],
+        default="sentence",
+        help="Subtitle timing and display style (default: sentence)",
+    )
     parser.add_argument("--ratio", choices=["9:16", "1:1", "16:9", "original"], help="Output ratio preset")
     parser.add_argument("--check", action="store_true", help="Check dependencies then exit")
     parser.add_argument("--update-ytdlp", action="store_true", help="Auto-update yt-dlp on startup")
     parser.add_argument("--max-clips", type=int, default=10, help="Maximum number of clips to generate")
+    parser.add_argument("--max-duration", type=int, default=60, help="Maximum duration of each clip in seconds (0 for no limit)")
     parser.add_argument("--workers", type=int, default=0, help="Number of parallel workers for processing (0 for auto)")
     return parser.parse_args()
 
@@ -418,7 +429,7 @@ def cek_dependensi(install_whisper=False, fatal=True):
     return True
 
 
-def ambil_metadata_dan_heatmap(video_id, min_score=0.20):
+def ambil_metadata_dan_heatmap(video_id, min_score=0.20, max_duration=60):
     """
     Fetch all video metadata, duration, and heatmap data in a single yt-dlp call.
     """
@@ -436,8 +447,8 @@ def ambil_metadata_dan_heatmap(video_id, min_score=0.20):
         
         # Parse and process heatmap
         heatmap_raw = raw.get("heatmap") or []
-        spiked_segments = detect_viral_spikes(heatmap_raw, min_score=min_score)
-        merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0)
+        spiked_segments = detect_viral_spikes(heatmap_raw, min_score=min_score, max_duration=max_duration)
+        merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0, max_duration=max_duration)
         
         # Sort by score descending (select_non_overlapping requires sorted candidates)
         heatmap_data = sorted(merged_segments, key=lambda x: x["score"], reverse=True)
@@ -515,7 +526,7 @@ def unduh_video_penuh(video_id, output_path):
             return False
 
 
-def ambil_most_replayed(video_id, min_score=0.20):
+def ambil_most_replayed(video_id, min_score=0.20, max_duration=60):
     """
     Fetch and parse YouTube 'Most Replayed' heatmap data.
     Returns a list of high-engagement segments.
@@ -563,8 +574,8 @@ def ambil_most_replayed(video_id, min_score=0.20):
             continue
 
     # Process using our helpers:
-    spiked_segments = detect_viral_spikes(raw_markers, min_score=min_score)
-    merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0)
+    spiked_segments = detect_viral_spikes(raw_markers, min_score=min_score, max_duration=max_duration)
+    merged_segments = merge_adjacent_segments(spiked_segments, gap_limit=5.0, max_duration=max_duration)
     merged_segments.sort(key=lambda x: x["score"], reverse=True)
     return merged_segments
 
@@ -599,12 +610,13 @@ def get_duration(video_id):
     return 3600
 
 
-def generate_subtitle(video_file, subtitle_file, event_hook=None, language="id"):
+def transcribe_segment(video_file, language="id", subtitle_style="sentence", event_hook=None):
     """
-    Generate subtitle file using Faster-Whisper for the given video.
-    Returns True if successful, False otherwise.
+    Transcribe video_file using Faster-Whisper and return raw segments.
     """
     from faster_whisper import WhisperModel
+
+    word_timestamps = subtitle_style != "sentence"
 
     def load_and_transcribe():
         if callable(event_hook):
@@ -621,25 +633,92 @@ def generate_subtitle(video_file, subtitle_file, event_hook=None, language="id")
                 event_hook("stage", {"stage": "subtitle_transcribe"})
             except Exception:
                 pass
-        segments, info = model.transcribe(video_file, language=language)
-        return segments
+        segments_gen, info = model.transcribe(video_file, language=language, word_timestamps=word_timestamps)
+        return list(segments_gen)
 
     try:
-        segments = load_and_transcribe()
+        return load_and_transcribe()
     except Exception as e:
         msg = str(e)
         if os.name == "nt" and "WinError 1314" in msg:
-            print(f"  Failed to generate subtitle: {msg}")
+            print(f"  Failed to transcribe: {msg}")
             print("  Windows kamu kelihatan tidak mengizinkan symlink (HuggingFace cache).")
             print("  Retrying sekali lagi (biasanya langsung beres setelah fallback cache aktif)...")
-            try:
-                segments = load_and_transcribe()
-            except Exception as e2:
-                print(f"  Failed to generate subtitle: {str(e2)}")
-                return False
+            return load_and_transcribe()
         else:
-            print(f"  Failed to generate subtitle: {msg}")
-            return False
+            raise
+
+
+def optimize_clip_boundaries(segments, peak_start, peak_end, max_duration, total_draft_duration):
+    """
+    Finds the best sub-window [A, B] within [0, total_draft_duration] such that:
+    - B - A <= max_duration (if max_duration > 0)
+    - A aligns with a segment/word start, B aligns with a segment/word end
+    - It maximizes overlap with the peak [peak_start, peak_end]
+    """
+    if not max_duration or max_duration <= 0:
+        max_duration = total_draft_duration
+
+    # Fallback default: center the window around the peak
+    peak_dur = peak_end - peak_start
+    if peak_dur >= max_duration:
+        center = (peak_start + peak_end) / 2.0
+        fallback_start = max(0.0, center - max_duration / 2.0)
+        fallback_end = min(total_draft_duration, fallback_start + max_duration)
+    else:
+        extra = max_duration - peak_dur
+        fallback_start = max(0.0, peak_start - extra / 2.0)
+        fallback_end = min(total_draft_duration, fallback_start + max_duration)
+        if fallback_end == total_draft_duration:
+            fallback_start = max(0.0, fallback_end - max_duration)
+
+    if not segments:
+        return fallback_start, fallback_end
+
+    starts = sorted(list({seg.start for seg in segments if 0.0 <= seg.start < total_draft_duration}))
+    ends = sorted(list({seg.end for seg in segments if 0.0 < seg.end <= total_draft_duration}))
+
+    if 0.0 not in starts:
+        starts.insert(0, 0.0)
+    if total_draft_duration not in ends:
+        ends.append(total_draft_duration)
+
+    best_start = fallback_start
+    best_end = fallback_end
+    best_overlap = -1.0
+    best_center_dist = 999999.0
+
+    for A in starts:
+        for B in ends:
+            if B <= A:
+                continue
+            dur = B - A
+            if dur > max_duration:
+                continue
+
+            overlap = max(0.0, min(B, peak_end) - max(A, peak_start))
+            win_center = (A + B) / 2.0
+            peak_center = (peak_start + peak_end) / 2.0
+            center_dist = abs(win_center - peak_center)
+
+            r_overlap = round(overlap, 2)
+            r_center_dist = round(center_dist, 2)
+
+            if (r_overlap > best_overlap) or (r_overlap == best_overlap and r_center_dist < best_center_dist):
+                best_overlap = r_overlap
+                best_center_dist = r_center_dist
+                best_start = A
+                best_end = B
+
+    if best_end - best_start < 2.0:
+        return fallback_start, fallback_end
+
+    return best_start, best_end
+
+
+def write_srt_from_segments(segments, subtitle_file, subtitle_style="sentence", t_start=0.0, t_end=None, event_hook=None):
+    if t_end is None:
+        t_end = 999999.0
 
     if callable(event_hook):
         try:
@@ -647,17 +726,220 @@ def generate_subtitle(video_file, subtitle_file, event_hook=None, language="id")
         except Exception:
             pass
     print("  Generating subtitle file...")
-    with open(subtitle_file, "w", encoding="utf-8") as f:
-        for i, segment in enumerate(segments, start=1):
-            start_time = format_timestamp(segment.start)
-            end_time = format_timestamp(segment.end)
-            text = segment.text.strip()
 
-            f.write(f"{i}\n")
-            f.write(f"{start_time} --> {end_time}\n")
-            f.write(f"{text}\n\n")
+    has_words = False
+    all_words = []
+    for segment in segments:
+        if hasattr(segment, "words") and segment.words:
+            has_words = True
+            for w in segment.words:
+                if w.end <= t_start or w.start >= t_end:
+                    continue
+                shifted_w = SimpleNamespace(
+                    start=max(0.0, w.start - t_start),
+                    end=min(t_end - t_start, w.end - t_start),
+                    word=w.word
+                )
+                all_words.append(shifted_w)
+
+    if subtitle_style == "sentence" or not has_words:
+        with open(subtitle_file, "w", encoding="utf-8") as f:
+            srt_index = 1
+            for segment in segments:
+                if segment.end <= t_start or segment.start >= t_end:
+                    continue
+                seg_start = max(0.0, segment.start - t_start)
+                seg_end = min(t_end - t_start, segment.end - t_start)
+                start_time = format_timestamp(seg_start)
+                end_time = format_timestamp(seg_end)
+                text = segment.text.strip()
+                f.write(f"{srt_index}\n")
+                f.write(f"{start_time} --> {end_time}\n")
+                f.write(f"{text}\n\n")
+                srt_index += 1
+        return True
+
+    # Ensure all word timings have valid durations
+    for w in all_words:
+        if w.end <= w.start:
+            w.end = w.start + 0.1
+
+    with open(subtitle_file, "w", encoding="utf-8") as f:
+        if subtitle_style == "word_by_word":
+            srt_index = 1
+            for w in all_words:
+                w_text = w.word.strip()
+                if not w_text:
+                    continue
+                start_time = format_timestamp(w.start)
+                end_time = format_timestamp(w.end)
+                f.write(f"{srt_index}\n")
+                f.write(f"{start_time} --> {end_time}\n")
+                f.write(f"{w_text}\n\n")
+                srt_index += 1
+
+        elif subtitle_style == "phrase_by_phrase":
+            phrases = []
+            current_phrase = []
+            phrase_word_limit = 3
+            phrase_char_limit = 18
+            pause_limit = 0.8
+
+            for w in all_words:
+                w_text = w.word.strip()
+                if not w_text:
+                    continue
+
+                if current_phrase:
+                    last_w = current_phrase[-1]
+                    time_gap = w.start - last_w.end
+                    curr_text = " ".join([x.word.strip() for x in current_phrase])
+                    
+                    if (time_gap > pause_limit or 
+                        any(last_w.word.strip().endswith(p) for p in [".", ",", "?", "!"]) or
+                        len(current_phrase) >= phrase_word_limit or
+                        len(curr_text) + len(w_text) + 1 > phrase_char_limit):
+                        
+                        phrases.append(current_phrase)
+                        current_phrase = []
+
+                current_phrase.append(w)
+
+            if current_phrase:
+                phrases.append(current_phrase)
+
+            srt_index = 1
+            for p_words in phrases:
+                start_time = format_timestamp(p_words[0].start)
+                end_time = format_timestamp(p_words[-1].end)
+                p_text = " ".join([x.word.strip() for x in p_words])
+                
+                f.write(f"{srt_index}\n")
+                f.write(f"{start_time} --> {end_time}\n")
+                f.write(f"{p_text}\n\n")
+                srt_index += 1
+
+        elif subtitle_style == "karaoke":
+            phrases = []
+            current_phrase = []
+            karaoke_word_limit = 5
+            karaoke_char_limit = 30
+            pause_limit = 1.0
+
+            for w in all_words:
+                w_text = w.word.strip()
+                if not w_text:
+                    continue
+
+                if current_phrase:
+                    last_w = current_phrase[-1]
+                    time_gap = w.start - last_w.end
+                    curr_text = " ".join([x.word.strip() for x in current_phrase])
+                    
+                    if (time_gap > pause_limit or 
+                        any(last_w.word.strip().endswith(p) for p in [".", "?", "!"]) or
+                        len(current_phrase) >= karaoke_word_limit or
+                        len(curr_text) + len(w_text) + 1 > karaoke_char_limit):
+                        
+                        phrases.append(current_phrase)
+                        current_phrase = []
+
+                current_phrase.append(w)
+
+            if current_phrase:
+                phrases.append(current_phrase)
+
+            srt_index = 1
+            for p_words in phrases:
+                n_words = len(p_words)
+                for i, active_w in enumerate(p_words):
+                    sub_start = active_w.start
+                    if i < n_words - 1:
+                        sub_end = p_words[i+1].start
+                    else:
+                        sub_end = active_w.end
+
+                    if sub_end <= sub_start:
+                        sub_end = sub_start + 0.1
+
+                    start_time = format_timestamp(sub_start)
+                    end_time = format_timestamp(sub_end)
+
+                    text_parts = []
+                    for j, w_item in enumerate(p_words):
+                        w_item_text = w_item.word.strip()
+                        if j == i:
+                            text_parts.append(f"<font color=\"#FFCC00\">{w_item_text}</font>")
+                        else:
+                            text_parts.append(w_item_text)
+                    p_text = " ".join(text_parts)
+
+                    f.write(f"{srt_index}\n")
+                    f.write(f"{start_time} --> {end_time}\n")
+                    f.write(f"{p_text}\n\n")
+                    srt_index += 1
+
+        elif subtitle_style == "line_by_line":
+            phrases = []
+            current_phrase = []
+            line_word_limit = 10
+            line_char_limit = 50
+            pause_limit = 1.0
+
+            for w in all_words:
+                w_text = w.word.strip()
+                if not w_text:
+                    continue
+
+                if current_phrase:
+                    last_w = current_phrase[-1]
+                    time_gap = w.start - last_w.end
+                    curr_text = " ".join([x.word.strip() for x in current_phrase])
+                    
+                    if (time_gap > pause_limit or 
+                        any(last_w.word.strip().endswith(p) for p in [".", "?", "!"]) or
+                        len(current_phrase) >= line_word_limit or
+                        len(curr_text) + len(w_text) + 1 > line_char_limit):
+                        
+                        phrases.append(current_phrase)
+                        current_phrase = []
+
+                current_phrase.append(w)
+
+            if current_phrase:
+                phrases.append(current_phrase)
+
+            srt_index = 1
+            for p_words in phrases:
+                start_time = format_timestamp(p_words[0].start)
+                end_time = format_timestamp(p_words[-1].end)
+                
+                text_list = [x.word.strip() for x in p_words]
+                total_len = sum(len(t) for t in text_list) + len(text_list) - 1
+                if total_len <= 28:
+                    p_text = " ".join(text_list)
+                else:
+                    mid = len(text_list) // 2
+                    line1 = " ".join(text_list[:mid])
+                    line2 = " ".join(text_list[mid:])
+                    p_text = f"{line1}\n{line2}"
+
+                f.write(f"{srt_index}\n")
+                f.write(f"{start_time} --> {end_time}\n")
+                f.write(f"{p_text}\n\n")
+                srt_index += 1
 
     return True
+
+
+def generate_subtitle(video_file, subtitle_file, event_hook=None, language="id", subtitle_style="sentence"):
+    try:
+        segments = transcribe_segment(video_file, language, subtitle_style, event_hook)
+        return write_srt_from_segments(segments, subtitle_file, subtitle_style, t_start=0.0, t_end=None, event_hook=event_hook)
+    except Exception as e:
+        print(f"Failed to generate subtitle: {str(e)}")
+        return False
+
 
 
 def format_timestamp(seconds):
@@ -702,7 +984,7 @@ def get_best_encoder():
     return _detected_encoder_cache
 
 
-def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, config=None):
+def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, config=None, start_time=0.0, end_time=None):
     """
     Perform Auto Face Tracking Smart Crop using OpenCV.
     Decodes the input video frame-by-frame, tracks the presenter's face using a hybrid
@@ -746,6 +1028,19 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
     if fps <= 0:
         fps = 30.0
 
+    # Handle start_time and end_time seeking
+    if start_time > 0:
+        start_frame = int(start_time * fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    else:
+        start_frame = 0
+
+    if end_time is not None:
+        end_frame = int(end_time * fps)
+    else:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        end_frame = total_frames if total_frames > 0 else 999999
+
     # Calculate dynamic aspect ratio and crop window size
     aspect_ratio = out_width / out_height
     h_crop = int(h_orig * (1.0 - crop_padding))
@@ -783,11 +1078,13 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
         fourcc = cv2.VideoWriter_fourcc(*"XVID")
         out = cv2.VideoWriter(output_path, fourcc, fps, (out_width, out_height))
 
+    frame_idx = start_frame
     try:
-        while True:
+        while frame_idx < end_frame:
             ret, frame = cap.read()
             if not ret:
                 break
+            frame_idx += 1
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             face_found = False
@@ -962,7 +1259,7 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
 
 
 
-def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default", use_subtitle=False, event_hook=None, stream_urls=None, local_video_path=None, subtitle_lang="en", output_ratio=None, out_w=None, out_h=None, output_dir=None, job_id=None, smart_config=None):
+def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default", use_subtitle=False, event_hook=None, stream_urls=None, local_video_path=None, subtitle_lang="en", output_ratio=None, out_w=None, out_h=None, output_dir=None, job_id=None, smart_config=None, subtitle_style="sentence", max_duration=60):
     """
     Download, crop, and export a single vertical clip
     based on a heatmap segment.
@@ -1095,7 +1392,14 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
             print("Failed to download video segment.")
             return False
 
-        # Generate subtitle from temp_file first (if enabled)
+        # Determine precise t_start and t_end relative to temp_file
+        peak_start = max(0.0, start_original - start)
+        peak_end = min(end - start, end_original - start)
+        draft_duration = end - start
+
+        t_start = 0.0
+        t_end = draft_duration
+        
         subtitle_generated = False
         if use_subtitle:
             if callable(event_hook):
@@ -1103,11 +1407,22 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     event_hook("stage", {"stage": "subtitle", "clip_index": index})
                 except Exception:
                     pass
-            print("  Generating subtitle...")
-            if generate_subtitle(temp_file, subtitle_file, event_hook=event_hook, language=subtitle_lang):
+            print("  Generating subtitle and optimizing boundaries...")
+            try:
+                transcribed_segments = transcribe_segment(temp_file, language=subtitle_lang, subtitle_style=subtitle_style, event_hook=event_hook)
+                t_start, t_end = optimize_clip_boundaries(transcribed_segments, peak_start, peak_end, max_duration, draft_duration)
+                write_srt_from_segments(transcribed_segments, subtitle_file, subtitle_style, t_start, t_end, event_hook=event_hook)
                 subtitle_generated = True
-            else:
-                print("  Subtitle generation failed, continuing without subtitle...")
+            except Exception as e:
+                print(f"  Transcription/Alignment failed: {str(e)}")
+                print("  Falling back to raw time-centered clip...")
+                t_start, t_end = optimize_clip_boundaries([], peak_start, peak_end, max_duration, draft_duration)
+        else:
+            t_start, t_end = optimize_clip_boundaries([], peak_start, peak_end, max_duration, draft_duration)
+
+        t_SS = t_start
+        t_DUR = t_end - t_start
+        print(f"  Precise cut selected: {t_SS:.2f}s to {t_end:.2f}s (duration: {t_DUR:.2f}s)")
 
         # Resolve aspect ratio width/height locally or fall back to globals
         if out_w is not None or out_h is not None or output_ratio == "original":
@@ -1148,7 +1463,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                 vf = sub_vf
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-i", temp_file,
+                    "-ss", str(t_SS), "-t", str(t_DUR), "-i", temp_file,
                     *(["-vf", vf] if vf else []),
                 ] + get_best_encoder() + [
                     "-c:a", "aac", "-b:a", "128k",
@@ -1160,7 +1475,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     vf = f"{vf},{sub_vf}"
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-i", temp_file,
+                    "-ss", str(t_SS), "-t", str(t_DUR), "-i", temp_file,
                     "-vf", vf,
                 ] + get_best_encoder() + [
                     "-c:a", "aac", "-b:a", "128k",
@@ -1180,14 +1495,14 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     pass
                     
             print("  Running Auto Face Tracking Smart Crop...")
-            smart_crop_video(temp_file, temp_cropped_silent, w_target, h_target, smart_config)
+            smart_crop_video(temp_file, temp_cropped_silent, w_target, h_target, smart_config, start_time=t_SS, end_time=t_end)
             
             # Setup FFmpeg to merge audio and burn subtitles
             if sub_vf:
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                     "-i", temp_cropped_silent,
-                    "-i", temp_file,
+                    "-ss", str(t_SS), "-t", str(t_DUR), "-i", temp_file,
                     "-map", "0:v", "-map", "1:a?",
                     "-vf", sub_vf,
                 ] + get_best_encoder() + [
@@ -1198,7 +1513,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                     "-i", temp_cropped_silent,
-                    "-i", temp_file,
+                    "-ss", str(t_SS), "-t", str(t_DUR), "-i", temp_file,
                     "-map", "0:v", "-map", "1:a?",
                 ] + get_best_encoder() + [
                     "-c:a", "aac", "-b:a", "128k",
@@ -1211,7 +1526,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                     vf = f"{vf},{sub_vf}" if vf else sub_vf
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-i", temp_file,
+                    "-ss", str(t_SS), "-t", str(t_DUR), "-i", temp_file,
                     *(["-vf", vf] if vf else []),
                 ] + get_best_encoder() + [
                     "-c:a", "aac", "-b:a", "128k",
@@ -1242,7 +1557,7 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default",
                 
                 cmd_crop = [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-i", temp_file,
+                    "-ss", str(t_SS), "-t", str(t_DUR), "-i", temp_file,
                     "-filter_complex", vf,
                     "-map", "[out]", "-map", "0:a?",
                 ] + get_best_encoder() + [
@@ -1314,6 +1629,7 @@ def main():
     global CPU_THREADS
     args = parse_args()
     cek_dependensi._args = args
+    max_duration_val = args.max_duration if getattr(args, "max_duration", None) is not None else 60
 
     if args.whisper_model:
         global WHISPER_MODEL
@@ -1357,6 +1673,7 @@ def main():
         use_subtitle = None
 
     subtitle_lang = args.subtitle_lang or "id"
+    subtitle_style = args.subtitle_style or "sentence"
 
     link = args.url
 
@@ -1405,6 +1722,25 @@ def main():
             lang_choice = input("Select subtitle language (id/en) [default: en]: ").strip().lower()
             subtitle_lang = "id" if lang_choice == "id" else "en"
             print(f"   Language: {subtitle_lang}")
+
+            print("\n=== Subtitle Style / Timing ===")
+            print("1. Word by Word (Per Kata)")
+            print("2. Phrase by Phrase (Per Frasa)")
+            print("3. Karaoke / Active Word Highlight")
+            print("4. Sentence / Full Sentence [default]")
+            print("5. Line by Line (1-2 Baris)")
+            style_choice = input("Select subtitle style (1-5) [default: 4]: ").strip()
+            if style_choice == "1":
+                subtitle_style = "word_by_word"
+            elif style_choice == "2":
+                subtitle_style = "phrase_by_phrase"
+            elif style_choice == "3":
+                subtitle_style = "karaoke"
+            elif style_choice == "5":
+                subtitle_style = "line_by_line"
+            else:
+                subtitle_style = "sentence"
+            print(f"   Style: {subtitle_style}")
         else:
             print("❌ Subtitle disabled")
 
@@ -1425,14 +1761,14 @@ def main():
 
     # Fetch metadata and heatmap in a single fast call
     print("Fetching video metadata and heatmap info...")
-    meta = ambil_metadata_dan_heatmap(video_id)
+    meta = ambil_metadata_dan_heatmap(video_id, max_duration=max_duration_val)
     if meta:
         heatmap_data = meta["heatmap"]
         total_duration = meta["duration"]
         print(f"Title: {meta['title']}")
     else:
         # Fallback
-        heatmap_data = ambil_most_replayed(video_id)
+        heatmap_data = ambil_most_replayed(video_id, max_duration=max_duration_val)
         total_duration = get_duration(video_id)
 
     if not heatmap_data:
@@ -1502,7 +1838,9 @@ def main():
                             None,
                             stream_urls,
                             local_video_path,
-                            subtitle_lang
+                            subtitle_lang,
+                            subtitle_style=subtitle_style,
+                            max_duration=max_duration_val
                         )
                     )
                 for future in concurrent.futures.as_completed(futures):
@@ -1519,7 +1857,9 @@ def main():
                     use_subtitle,
                     stream_urls=stream_urls,
                     local_video_path=local_video_path,
-                    subtitle_lang=subtitle_lang
+                    subtitle_lang=subtitle_lang,
+                    subtitle_style=subtitle_style,
+                    max_duration=max_duration_val
                 ):
                     success_count += 1
     finally:

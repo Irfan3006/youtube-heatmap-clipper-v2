@@ -95,6 +95,7 @@ def run_job(job_id, payload):
         ratio = payload.get("ratio") or "9:16"
         subtitle = bool(payload.get("subtitle"))
         subtitle_lang = payload.get("subtitle_lang") or "en"
+        subtitle_style = payload.get("subtitle_style") or "sentence"
         whisper_model = payload.get("whisper_model") or "small"
         subtitle_font = payload.get("subtitle_font") or "Arial"
         subtitle_location = payload.get("subtitle_location") or "bottom"
@@ -103,6 +104,7 @@ def run_job(job_id, payload):
             subtitle_fontsdir = "fonts"
         padding = safe_int(payload.get("padding"), 10)
         max_clips = safe_int(payload.get("max_clips"), 10)
+        max_duration = safe_int(payload.get("max_duration"), 60)
         mode = payload.get("mode") or "heatmap"
         set_job(job_id, subtitle_enabled=subtitle)
  
@@ -157,12 +159,12 @@ def run_job(job_id, payload):
             raise ValueError("URL YouTube invalid")
 
         add_log(job_id, "Fetching video metadata and heatmap info...")
-        meta = core.ambil_metadata_dan_heatmap(video_id, min_score=min_score)
+        meta = core.ambil_metadata_dan_heatmap(video_id, min_score=min_score, max_duration=max_duration)
         if meta:
             targets_heatmap = meta["heatmap"]
             total_duration = meta["duration"]
         else:
-            targets_heatmap = core.ambil_most_replayed(video_id, min_score=min_score)
+            targets_heatmap = core.ambil_most_replayed(video_id, min_score=min_score, max_duration=max_duration)
             total_duration = core.get_duration(video_id)
 
         targets = []
@@ -268,7 +270,9 @@ def run_job(job_id, payload):
                         out_h=out_h,
                         output_dir=job_dir,
                         job_id=job_id,
-                        smart_config=smart_config
+                        smart_config=smart_config,
+                        subtitle_style=subtitle_style,
+                        max_duration=max_duration
                     )
                     futures[f] = idx
 
@@ -360,6 +364,7 @@ def api_scan():
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     padding = safe_int(data.get("padding"), 10)
+    max_duration = safe_int(data.get("max_duration"), 60)
     
     viral_sensitivity = data.get("viral_sensitivity") or "medium"
     duplicate_mode = data.get("duplicate_mode") or "strict"
@@ -389,7 +394,7 @@ def api_scan():
     if not ok:
         return jsonify({"ok": False, "error": "FFmpeg tidak ketemu"}), 400
 
-    segments = core.ambil_most_replayed(video_id, min_score=min_score)
+    segments = core.ambil_most_replayed(video_id, min_score=min_score, max_duration=max_duration)
     segments = core.select_non_overlapping(segments, 100, padding, overlap_threshold=overlap_threshold)
     segments.sort(key=lambda x: float(x.get("start", 0)))
     total = core.get_duration(video_id)

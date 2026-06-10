@@ -113,7 +113,7 @@
           </div>
         </div>
 
-        <div class="grid3">
+        <div class="grid2">
           <div class="row">
             <label class="label" data-i18n="label.crop">Crop</label>
             <select id="crop" class="input">
@@ -124,6 +124,22 @@
             </select>
             <div class="help" data-i18n="help.crop">Split itu buat gaming: atas gameplay, bawah facecam. Smart Crop buat track wajah otomatis.</div>
           </div>
+          <div class="row">
+            <label class="label" data-i18n="label.max_duration">Durasi Maksimal Clip</label>
+            <select id="max_duration" class="input">
+              <option value="0" data-i18n="opt.max_duration.none">Bebas (Tanpa Batas)</option>
+              <option value="10">10 detik</option>
+              <option value="20">20 detik</option>
+              <option value="30" selected>30 detik</option>
+              <option value="40">40 detik</option>
+              <option value="50">50 detik</option>
+              <option value="60">60 detik</option>
+            </select>
+            <div class="help" data-i18n="help.max_duration">Membatasi durasi maksimal tiap potongan video clip.</div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top: 12px;">
           <div class="row">
             <label class="label" data-i18n="label.padding">Padding (detik)</label>
             <input id="padding" class="input" type="number" min="0" value="10" />
@@ -203,7 +219,18 @@
           </div>
         </div>
 
-        <div class="grid2">
+        <div class="grid3">
+          <div class="row">
+            <label class="label" data-i18n="label.subtitle_style">Subtitle Style / Timing</label>
+            <select id="subtitle_style" class="input">
+              <option value="sentence" selected data-i18n="opt.subtitle_style.sentence">Sentence / Full Sentence</option>
+              <option value="word_by_word" data-i18n="opt.subtitle_style.word_by_word">Word by Word</option>
+              <option value="phrase_by_phrase" data-i18n="opt.subtitle_style.phrase_by_phrase">Phrase by Phrase</option>
+              <option value="karaoke" data-i18n="opt.subtitle_style.karaoke">Karaoke / Active Word Highlight</option>
+              <option value="line_by_line" data-i18n="opt.subtitle_style.line_by_line">Line by Line</option>
+            </select>
+            <div class="help" data-i18n="help.subtitle_style">Timing kemunculan kata/kalimat subtitle di video.</div>
+          </div>
           <div class="row">
             <label class="label" data-i18n="label.subtitle_location">Subtitle Location</label>
             <select id="subtitle_location" class="input">
