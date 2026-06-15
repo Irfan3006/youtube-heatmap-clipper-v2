@@ -1,10 +1,10 @@
 # YouTube Heatmap Clipper
 
-[Bahasa Indonesia](README.md) | [English](README_EN.md)
+[Bahasa Indonesia](README_ID.md) | [English](README.md)
 
-Aplikasi web untuk mengekstrak momen dengan tingkat interaksi tertinggi dari video YouTube berdasarkan data Most Replayed (heatmap), kemudian secara otomatis mengonversinya menjadi klip vertikal yang siap digunakan untuk Shorts, Reels, atau TikTok, lengkap dengan opsi subtitle berbasis kecerdasan buatan (AI).
+A web application to extract the most engaging segments from YouTube videos using Most Replayed (heatmap) data, and automatically convert them into vertical-ready clips for Shorts, Reels, and TikTok, featuring AI-powered subtitles.
 
-Proyek ini merupakan pengembangan lebih lanjut dari proyek: https://github.com/naufaljct48/youtube-heatmap-clipper yang berbasis pada proyek orisinal: https://github.com/0xACAB666/yt-heatmap-clipper. Pengembangan pada proyek ini dilakukan dengan fokus utama pada peningkatan kecepatan pemrosesan dan penyederhanaan antarmuka grafis agar lebih mudah digunakan.
+This project is a further development of the project: https://github.com/naufaljct48/youtube-heatmap-clipper which is based on the original project: https://github.com/0xACAB666/yt-heatmap-clipper. The development of this project focuses primarily on improving processing speed and refining the graphical user interface for ease of use.
 
 ## Preview
 
@@ -14,153 +14,153 @@ Proyek ini merupakan pengembangan lebih lanjut dari proyek: https://github.com/n
 | ![Preview 3](images/3.png) | ![Preview 4](images/4.png) |
 | ![Preview 5](images/5.png) |                            |
 
-## Fitur Baru dan Unggulan
+## New and Highlighted Features
 
-Proyek ini telah diperbarui secara menyeluruh untuk meningkatkan efisiensi pemrosesan, akurasi pelacakan, dan kemudahan bagi pengguna:
+This project has been updated with a focus on user experience, processing efficiency, and AI accuracy:
 
-### 1. Smart Face Tracking dengan Akurasi 99%
-*   **Hybrid Face Detection**: Menggunakan model Deep Learning YuNet DNN Face Detector sebagai sistem pendeteksi utama (yang otomatis diunduh pada saat pertama kali dijalankan) dengan sistem cadangan Haar Cascades (Frontal dan Profile) jika perangkat keras tidak mendukung DNN.
-*   **Scene Change Detection**: Mendeteksi perubahan adegan kamera secara otomatis untuk mengunci posisi wajah baru secara instan tanpa adanya jeda.
-*   **Cinematic Smoothing dan Deadzone**: Menggunakan algoritma LERP smoothing untuk menghasilkan gerakan kamera yang mulus serta konfigurasi Deadzone untuk meminimalisasi getaran kecil pada kamera.
+### 1. Smart Face Tracking with 99% Accuracy
+*   **Hybrid Face Detection**: Uses the advanced YuNet DNN Face Detector Deep Learning model as the primary detector (automatically downloaded on first launch) and falls back to Haar Cascades (Frontal and Profile) if hardware-accelerated DNN is not supported.
+*   **Scene Change Detection**: Intelligently detects camera cuts or transitions to instantly lock (auto-snap) onto the new face position without delay.
+*   **Cinematic Smoothing and Deadzone**: Features a LERP smoothing algorithm for fluid camera panning and adjustable Deadzone configurations to filter out minor, jittery camera movements.
 
-### 2. Algoritma Heatmap Lanjutan
-*   **Viral Spike Detection**: Algoritma ini menganalisis turunan nilai retensi serta rata-rata lokal untuk mendeteksi lonjakan interaksi yang sebenarnya pada video.
-*   **Smart Intro dan Outro Filter**: Mengabaikan 10% bagian awal (intro) dan 10% bagian akhir (outro) video secara otomatis untuk menghindari pemotongan pada segmen kosong atau layar akhir.
-*   **Sensitivitas Viral dan Filter Overlap**: Menyediakan pengaturan sensitivitas (Low, Medium, High, Extreme) serta pengaturan batasan tumpang tindih (overlap threshold) untuk hasil kurasi klip terbaik.
+### 2. Advanced Heatmap Algorithm
+*   **Viral Spike Detection**: The updated algorithm computes the mathematical derivative and local average of viewer retention to target actual engagement spikes, which represent the most viral moments.
+*   **Smart Intro and Outro Filter**: Automatically filters out the first 10% (intro) and last 10% (outro) of the video to avoid clipping empty scenes or end screens.
+*   **Viral Sensitivity and Overlap Filter**: Adjusts sensitivity levels (Low, Medium, High, Extreme) and overlap threshold configurations to obtain the best non-overlapping viral clip curations.
 
-### 3. Multi-Worker untuk Pemrosesan Paralel Cepat
-*   **Akselerasi Paralel**: Pemrosesan klip dijalankan secara bersamaan menggunakan ThreadPoolExecutor dengan penyesuaian jumlah thread worker secara otomatis berdasarkan kapasitas CPU sistem.
-*   **Fast-Seek Direct Stream**: Mengunduh klip secara cepat melalui ekstraksi langsung tautan streaming video menggunakan FFmpeg, atau opsi untuk mengunduh seluruh file video terlebih dahulu secara lokal sebelum melakukan pemotongan secara paralel.
+### 3. Faster with Multi-Worker Parallel Processing
+*   **Parallel Processing Speedup**: Processes clips concurrently using a ThreadPoolExecutor with worker counts automatically and dynamically scaled based on system CPU threads.
+*   **Fast-Seek Direct Stream Extraction**: Downloads segments rapidly via direct stream URL extraction with FFmpeg, or downloads the full video locally first for instant parallel slicing.
 
-### 4. Antarmuka Grafis (Web GUI) yang Berfokus pada Pengguna
-*   **Web UI Lebih Praktis**: Mengembangkan antarmuka berbasis Flask yang sudah ada agar lebih responsif, intuitif, dan memudahkan navigasi pengguna tanpa memerlukan langkah manual yang rumit.
-*   **Scan Heatmap Interaktif**: Memindai video untuk menampilkan daftar semua segmen terpopuler beserta grafik tingkat interaksinya secara visual.
-*   **Pemrosesan Massal dan Custom Range**: Pengguna dapat memilih beberapa segmen sekaligus untuk diproses atau menentukan rentang waktu mulai dan selesai secara manual.
-*   **Log Real-time dan Preview**: Memantau perkembangan pemrosesan klip melalui panel log secara langsung serta memutar atau mengunduh klip hasil pemotongan langsung dari browser.
+### 4. Focused on Web GUI for Ease of Use
+*   **Refined Web UI**: Developed and enhanced the existing Flask-based interface to make it more responsive, intuitive, and easier to navigate without complex manual steps.
+*   **Interactive Heatmap Scan**: Scans video URLs instantly to display all viral segments alongside interactive engagement graphs.
+*   **Bulk Processing and Custom Ranges**: Allows selecting multiple segments to process and export them concurrently, or defining custom start and end timestamps manually.
+*   **Real-time Logs and Built-in Player**: Monitors extraction progress in real-time through the log output panel, and allows playing or downloading completed clips directly from the browser.
 
-### 5. Pilihan Gaya Subtitle Dinamis (Faster-Whisper)
-*   **Transkripsi Cepat**: Didukung oleh Faster-Whisper yang memiliki kecepatan 4 hingga 5 kali lebih cepat dibandingkan dengan Whisper standar.
-*   **5 Gaya Tampilan Subtitle**:
-    *   `sentence`: Menampilkan kalimat lengkap secara terstruktur.
-    *   `word_by_word`: Menampilkan teks kata demi kata secara dinamis.
-    *   `phrase_by_phrase`: Menampilkan frasa pendek (maksimal 3 kata) untuk kemudahan membaca.
-    *   `line_by_line`: Menampilkan per baris (membagi otomatis kalimat panjang menjadi maksimal 2 baris yang rapi).
-    *   `karaoke`: Memberikan efek karaoke dinamis dengan menandai kata aktif menggunakan warna kuning terang (#FFCC00).
-*   **Kustomisasi Font dan Lokasi**: Mendukung berbagai jenis font (Plus Jakarta Sans, Roboto, Montserrat, Arial, atau Font Kustom) serta pilihan penempatan subtitle di posisi tengah (Centered) atau bawah (Bottom).
+### 5. Diverse Dynamic Subtitle Styles (Faster-Whisper)
+*   **Faster Transcription**: Powered by Faster-Whisper, reducing transcription wait times to 4 or 5 times faster compared to the standard OpenAI Whisper implementation.
+*   **5 Dynamic Subtitle Display Styles**:
+    *   `sentence`: Displays the complete sentence normally.
+    *   `word_by_word`: Displays text dynamically word-by-word.
+    *   `phrase_by_phrase`: Displays short, easy-to-read phrases of up to 3 words.
+    *   `line_by_line`: Displays line-by-line, automatically formatting longer text into up to 2 lines.
+    *   `karaoke`: A dynamic karaoke effect that highlights the active word in yellow (#FFCC00).
+*   **Custom Fonts and Placement**: Supports preferred fonts (Plus Jakarta Sans, Roboto, Montserrat, Arial, or Custom) and allows setting the location to either the middle (Centered) or the bottom (Bottom) of the frame.
 
 ---
 
-## Persyaratan Sistem
+## Requirements
 
-### Perangkat yang Didukung
-*   Aplikasi ini **hanya dapat dijalankan pada perangkat desktop atau laptop** (Windows, macOS, Linux) dan **tidak mendukung perangkat mobile** (Android, iOS).
+### Supported Devices
+*   This application **can only be run on desktop or laptop devices** (Windows, macOS, Linux) and **does not support mobile devices** (Android, iOS).
 
-### Spesifikasi Perangkat Keras Minimal
-*   **Prosesor (CPU)**: Intel Core i3 / AMD Ryzen 3 atau setara (disarankan minimal 4 core untuk performa multi-worker yang baik).
-*   **Memori (RAM)**: minimal 4 GB (disarankan 8 GB ke atas jika menggunakan model subtitle AI ukuran sedang atau besar).
-*   **Penyimpanan**: minimal 5 GB ruang kosong (untuk menampung berkas video mentah sementara dan model transkripsi AI).
+### Minimum Hardware Specifications
+*   **Processor (CPU)**: Intel Core i3 / AMD Ryzen 3 or equivalent (minimum 4 cores recommended for good multi-worker performance).
+*   **Memory (RAM)**: 4 GB minimum (8 GB or more recommended if using medium or large AI subtitle models).
+*   **Storage**: 5 GB of free space minimum (to store temporary raw video files and AI transcription models).
 
-### Persyaratan Perangkat Lunak
-- Python 3.8 ke atas (Python 3.11 sangat direkomendasikan)
-- FFmpeg (Diperlukan dan harus terpasang)
-- Koneksi Internet
-- Pustaka Python (otomatis terpasang melalui skrip pemulai): flask, yt-dlp, opencv-python, faster-whisper (jika fitur subtitle diaktifkan), dan pustaka terkait lainnya.
+### Software Requirements
+- Python 3.8+ (Python 3.11 highly recommended)
+- FFmpeg (Required and must be installed)
+- Internet Connection
+- Python Libraries (automatically installed by the launcher): flask, yt-dlp, opencv-python, faster-whisper (if subtitles are enabled), and related libraries.
 
-## Metode Penggunaan Termudah
+## How to Use (Easiest Way)
 
-Jalankan file skrip **web_start.bat** (atau **start.bat**). Skrip ini akan secara otomatis melakukan konfigurasi berikut:
-1. Memeriksa dan memasang semua pustaka yang tercantum pada file requirements.txt.
-2. Membuat Python Virtual Environment (venv) yang terisolasi dan aman.
-3. Memeriksa ketersediaan program FFmpeg pada sistem.
-4. Menjalankan Flask web server secara otomatis.
+Double-click the **web_start.bat** (or **start.bat**) file. The script will automatically:
+1. Verify and install requirements in requirements.txt.
+2. Create a secure Python Virtual Environment (venv).
+3. Check for FFmpeg in the system path.
+4. Launch the Flask web server.
 
-## Instalasi dan Pengoperasian Manual
+## Installation and Running Manually
 
-### 1. Memasang Kebutuhan Pustaka
+### 1. Install Requirements
 ```powershell
 python -m pip install -r requirements.txt
 python -m pip install faster-whisper
 ```
-*Catatan: Pemasangan faster-whisper dapat dilewati jika Anda tidak memerlukan fitur subtitle AI.*
+*Note: Skip faster-whisper if you do not require AI subtitle generation.*
 
-### 2. Menjalankan Aplikasi Web
+### 2. Run the Web App
 ```powershell
 python webapp.py
 ```
-Buka peramban (browser) Anda dan akses alamat berikut:
+Open your browser and navigate to:
 - http://127.0.0.1:5000/
 
 ---
 
-## Petunjuk Penggunaan Web GUI
+## Using the Web GUI
 
-1.  **Masukkan URL YouTube**: Informasi metadata video (judul, pengunggah, durasi, dan gambar mini) akan dimuat secara otomatis.
-2.  **Pilih Mode Pemotongan**:
-    *   **Scan Heatmap**: Klik tombol **Scan Heatmap** untuk mendeteksi momen terpopuler secara otomatis, pilih segmen yang diinginkan, kemudian klik tombol **Create Selected Clips**.
-    *   **Custom**: Masukkan waktu **Start** dan **End** secara manual, kemudian klik tombol untuk membuat klip.
-3.  **Pengaturan Tambahan**:
-    *   **Ratio**: Pilih rasio keluaran antara 9:16 (Vertikal), 1:1 (Kotak), 16:9 (Horizontal), atau Original.
-    *   **Crop Mode**: Pilih antara default (potongan tengah), split (membagi layar untuk menampilkan video utama di atas dan kamera wajah di bawah), atau smart (pemotongan cerdas berbasis pelacakan wajah dengan akurasi 99%).
-    *   **Subtitle**: Aktifkan opsi subtitle, pilih bahasa (ID/EN), pilih ukuran model Whisper, font, gaya tampilan, dan lokasi tampilan subtitle.
-    *   **Smart Crop Settings**: Konfigurasikan parameter pelacakan seperti smoothing factor, deadzone, tracking speed, dan relock timeout untuk mengoptimalkan pergerakan kamera face tracking.
-4.  **Proses Ekspor**: Log proses pembuatan klip akan ditampilkan di bagian bawah halaman. Setelah proses selesai, klip video dapat langsung diputar atau diunduh ke perangkat Anda.
+1.  **Paste YouTube URL**: The video metadata (title, channel, thumbnail) will load automatically.
+2.  **Select Clipping Mode**:
+    *   **Scan Heatmap**: Click **Scan Heatmap** to auto-detect viral segments, check the boxes of the clips you want, and click **Create Selected Clips**.
+    *   **Custom**: Enter manual **Start** and **End** times, and click the button to create manual ranges.
+3.  **Configure Options**:
+    *   **Ratio**: Select 9:16 (Vertical), 1:1 (Square), 16:9 (Horizontal), or Original ratio.
+    *   **Crop Mode**: Select default (center crop), split (displays main video on top, facecam on the bottom-left or bottom-right), or smart (99% accurate face tracking crop).
+    *   **Subtitle**: Turn on subtitles, choose language (ID/EN), choose Whisper model size, select font, style, and screen location.
+    *   **Smart Crop Settings**: Fine-tune the smoothing factor, deadzone, tracking speed, and relock timeout parameters to optimize face tracking camera movements.
+4.  **Export**: Track clipping progress in the console log at the bottom. Once complete, play or download your clips directly from the interface.
 
 ---
 
-## Menjalankan Menggunakan Command Line Interface (CLI)
+## Running via CLI (Optional)
 
-Jika Anda lebih memilih penggunaan terminal, jalankan perintah berikut:
+If you prefer terminal commands, run:
 ```powershell
 python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --subtitle y --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-location bottom --subtitle-style karaoke --ratio 9:16
 ```
 
-### Parameter CLI Utama:
+### Key CLI Arguments:
 *   `--crop`: default | split_left | split_right | smart (Face Tracking)
 *   `--ratio`: 9:16 | 1:1 | 16:9 | original
 *   `--subtitle`: y | n
 *   `--subtitle-lang`: id | en (Default: en)
 *   `--whisper-model`: tiny | base | small | medium | large-v3
-*   `--subtitle-font`: Nama font (misalnya Poppins)
+*   `--subtitle-font`: Font name (e.g. Poppins)
 *   `--subtitle-style`: sentence | word_by_word | phrase_by_phrase | line_by_line | karaoke
 *   `--subtitle-location`: bottom | center
-*   `--workers`: Jumlah proses worker paralel (0 untuk otomatis)
+*   `--workers`: Number of parallel workers (0 for auto)
 
 ---
 
-## Perbandingan Model Whisper
+## Whisper Model Comparison
 
-| Model        | Ukuran | Kebutuhan RAM | Kecepatan Transkripsi (60s) | Tingkat Akurasi | Rekomendasi Penggunaan  |
-| ------------ | ------ | ------------- | --------------------------- | --------------- | ----------------------- |
-| **tiny**     | 75 MB  | ~500 MB       | ~5-7 detik                  | Cukup           | Proses cepat, PC spesifikasi rendah |
-| **base**     | 142 MB | ~700 MB       | ~8-10 detik                 | Baik            | Penggunaan umum         |
-| **small**    | 466 MB | ~1.5 GB       | ~15-20 detik                | Sangat Baik     | Konten berkualitas      |
-| **medium**   | 1.5 GB | ~3 GB         | ~40-50 detik                | Luar Biasa      | Penggunaan profesional  |
-| **large-v3** | 2.9 GB | ~6 GB         | ~90-120 detik               | Terbaik         | Kualitas produksi akhir |
+| Model        | Size   | RAM     | Speed (60s) | Accuracy  | Best For                |
+| ------------ | ------ | ------- | ----------- | --------- | ----------------------- |
+| **tiny**     | 75 MB  | ~500 MB | ~5-7s       | Good      | Quick clips, low-end PC |
+| **base**     | 142 MB | ~700 MB | ~8-10s      | Better    | General purpose         |
+| **small**    | 466 MB | ~1.5 GB | ~15-20s     | Great     | Quality content         |
+| **medium**   | 1.5 GB | ~3 GB   | ~40-50s     | Excellent | Professional work       |
+| **large-v3** | 2.9 GB | ~6 GB   | ~90-120s    | Best      | Production quality      |
 
-> **Rekomendasi**: Gunakan model `tiny` untuk performa kecepatan terbaik, atau model `small` untuk keseimbangan akurasi transkripsi dan kecepatan yang ideal.
+> **Recommendation**: Use `tiny` for the fastest possible rendering speed, or `small` for a balance between transcription accuracy and processing overhead.
 
 ---
 
-## Spesifikasi Output Video
+## Output Video Specifications
 
 *   **Format**: MP4 (H.264 video + AAC audio)
-*   **Resolusi Default**: 720x1280 (9:16 Vertikal)
-*   **Video Codec**: Penggunaan encoder terakselerasi perangkat keras (seperti h264_amf untuk AMD, h264_nvenc untuk NVIDIA, h264_qsv untuk Intel) jika tersedia, dengan cadangan otomatis ke libx264 (preset ultrafast, CRF 26).
+*   **Default Resolution**: 720x1280 (9:16 Vertical)
+*   **Video Codec**: Hardware Accelerated Encoder (e.g. h264_amf for AMD, h264_nvenc for NVIDIA, h264_qsv for Intel) if supported, with automatic fallback to libx264 (ultrafast preset, CRF 26).
 *   **Audio Codec**: AAC, 128 kbps
-*   **Subtitles**: Tertanam langsung pada berkas video (burned-in) sesuai dengan font, gaya, dan tata letak yang dikonfigurasi.
+*   **Subtitles**: Burned-in directly into the video file matching your font, style, and position preferences.
 
 ---
 
-## Panduan Pemasangan FFmpeg
+## FFmpeg Installation Guide
 
-Aplikasi ini memerlukan FFmpeg untuk pemrosesan video. Di sistem Windows, aplikasi akan mencoba mendeteksi ketersediaan FFmpeg secara otomatis jika dipasang melalui WinGet.
+The application requires FFmpeg to function. On Windows, it attempts to auto-detect FFmpeg if installed via WinGet.
 
-### Windows (Metode Tercepat):
-Jalankan perintah berikut pada PowerShell dengan hak akses Administrator:
+### Windows (Quickest Way):
+Open PowerShell as Administrator and run:
 ```powershell
 winget install Gyan.FFmpeg
 ```
-Setelah proses pemasangan selesai, silakan mulai ulang (restart) terminal atau VS Code Anda agar perubahan PATH dapat terdeteksi.
+After installation completes, restart your terminal or VS Code to apply PATH changes.
 
 ### macOS:
 ```bash
@@ -174,21 +174,21 @@ sudo apt update && sudo apt install ffmpeg
 
 ---
 
-## Lisensi
+## License
 
-Proyek ini dilisensikan di bawah MIT License.
+This project is licensed under the MIT License.
 
-## Kredit dan Apresiasi
+## Credits and Special Thanks
 
-- **Proyek Original**: Apresiasi kepada pembuat proyek asli: https://github.com/0xACAB666/yt-heatmap-clipper
-- **Pengembangan GUI & Optimasi Awal**: Apresiasi kepada naufaljct48 yang mengembangkan versi GUI dan melakukan optimasi awal: https://github.com/naufaljct48/youtube-heatmap-clipper
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Alat pengunduh media YouTube
-- [FFmpeg](https://ffmpeg.org/) - Kakas pemrosesan multimedia
-- [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Pustaka transkripsi audio AI cepat
-- [OpenAI Whisper](https://github.com/openai/whisper) - Model pengenalan ucapan berbasis AI
+- **Original Project**: Special thanks to the creator of the original project: https://github.com/0xACAB666/yt-heatmap-clipper
+- **GUI Version & Initial Optimizations**: Special thanks to naufaljct48 who created the GUI version and initial optimizations: https://github.com/naufaljct48/youtube-heatmap-clipper
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube video downloader
+- [FFmpeg](https://ffmpeg.org/) - Video processing suite
+- [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Fast AI speech-to-text library
+- [OpenAI Whisper](https://github.com/openai/whisper) - Speech recognition model
 
 ---
 
-## Dukungan dan Kontribusi
+## Support and Contribution
 
-Apabila aplikasi ini bermanfaat bagi Anda, silakan berikan bintang (star) pada repositori ini. Untuk melaporkan masalah atau mengajukan pertanyaan, silakan buat issue baru pada repositori GitHub.
+If you find this application helpful, please star the repository. Feel free to open a GitHub Issue for bugs, questions, or feature requests.
