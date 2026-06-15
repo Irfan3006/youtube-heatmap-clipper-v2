@@ -4,7 +4,7 @@
 
 Aplikasi web untuk mengekstrak momen dengan tingkat interaksi tertinggi dari video YouTube berdasarkan data Most Replayed (heatmap), kemudian secara otomatis mengonversinya menjadi klip vertikal yang siap digunakan untuk Shorts, Reels, atau TikTok, lengkap dengan opsi subtitle berbasis kecerdasan buatan (AI).
 
-Proyek ini merupakan pengembangan lebih lanjut dari proyek: https://github.com/naufaljct48/youtube-heatmap-clipper (yang mengembangkan versi GUI dan melakukan optimasi awal dari proyek orisinal: https://github.com/0xACAB666/yt-heatmap-clipper), dengan fokus utama pada peningkatan kecepatan pemrosesan (multi-worker), pelacakan wajah cerdas (smart face tracking), beragam opsi gaya subtitle dinamis, serta penyederhanaan antarmuka grafis agar lebih mudah digunakan.
+Proyek ini merupakan pengembangan lebih lanjut dari proyek: https://github.com/naufaljct48/youtube-heatmap-clipper yang berbasis pada proyek orisinal: https://github.com/0xACAB666/yt-heatmap-clipper. Pengembangan pada proyek ini dilakukan dengan fokus utama pada peningkatan kecepatan pemrosesan dan penyederhanaan antarmuka grafis agar lebih mudah digunakan.
 
 ## Preview
 
