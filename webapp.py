@@ -206,8 +206,26 @@ def run_job(job_id, payload):
                 targets = [{"start": float(start_s), "duration": float(end_s - start_s), "score": 1.0}]
         else:
             if not targets_heatmap:
-                raise RuntimeError("Tidak ada heatmap/Most Replayed data")
-            targets = core.select_non_overlapping(targets_heatmap, max(1, max_clips or 10), padding, overlap_threshold=overlap_threshold)
+                add_log(job_id, "⚠️ Video tidak memiliki data interaksi (heatmap) dari YouTube. Membuat segmen default secara merata...")
+                total_duration_val = total_duration or 600
+                start_margin = total_duration_val * 0.10
+                end_margin = total_duration_val * 0.90
+                available_dur = end_margin - start_margin
+                num_clips = max(1, max_clips or 10)
+                segment_len = float(max_duration or 30)
+                
+                if available_dur > segment_len * num_clips:
+                    step = (available_dur - segment_len) / (num_clips - 1) if num_clips > 1 else available_dur
+                    for i in range(num_clips):
+                        t_start = start_margin + i * step
+                        targets.append({"start": t_start, "duration": segment_len, "score": 0.5})
+                else:
+                    step = available_dur / num_clips
+                    for i in range(num_clips):
+                        t_start = start_margin + i * step
+                        targets.append({"start": t_start, "duration": min(step, segment_len), "score": 0.5})
+            else:
+                targets = core.select_non_overlapping(targets_heatmap, max(1, max_clips or 10), padding, overlap_threshold=overlap_threshold)
 
         set_job(job_id, total=len(targets), done=0, status_text="processing")
 
@@ -396,8 +414,28 @@ def api_scan():
 
     segments = core.ambil_most_replayed(video_id, min_score=min_score, max_duration=max_duration)
     segments = core.select_non_overlapping(segments, 100, padding, overlap_threshold=overlap_threshold)
+    total = core.get_duration(video_id) or 600
+
+    if not segments:
+        # Generate default segments evenly spaced
+        start_margin = total * 0.10
+        end_margin = total * 0.90
+        available_dur = end_margin - start_margin
+        num_clips = 5  # default to 5 clips on scan
+        segment_len = float(max_duration or 30)
+        
+        if available_dur > segment_len * num_clips:
+            step = (available_dur - segment_len) / (num_clips - 1) if num_clips > 1 else available_dur
+            for i in range(num_clips):
+                t_start = start_margin + i * step
+                segments.append({"start": t_start, "duration": segment_len, "score": 0.5})
+        else:
+            step = available_dur / num_clips
+            for i in range(num_clips):
+                t_start = start_margin + i * step
+                segments.append({"start": t_start, "duration": min(step, segment_len), "score": 0.5})
+
     segments.sort(key=lambda x: float(x.get("start", 0)))
-    total = core.get_duration(video_id)
     return jsonify({"ok": True, "video_id": video_id, "duration": total, "segments": segments})
 
 

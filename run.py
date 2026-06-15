@@ -78,9 +78,20 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
     Identify segments in the raw heatmap that show sharp intensity increases (spikes)
     above the local average. Enhance their scores by weighting both raw intensity
     and spike magnitude.
+    Filters out the first 10% (intro) and last 10% (outro) of the video.
     """
     if not heatmap_raw:
         return []
+        
+    # Calculate approximate video duration
+    total_duration = 0.0
+    for m in heatmap_raw:
+        end_t = float(m.get("end_time", 0))
+        if end_t > total_duration:
+            total_duration = end_t
+            
+    intro_threshold = total_duration * 0.10
+    outro_threshold = total_duration * 0.90
         
     n = len(heatmap_raw)
     values = []
@@ -108,6 +119,10 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
             end = float(marker.get("end_time", 0))
             val = values[i]
             
+            # Abaikan bagian intro (10% pertama) dan outro (10% terakhir)
+            if start < intro_threshold or start > outro_threshold:
+                continue
+            
             # Derivative (difference from previous point)
             if i > 0:
                 diff = val - values[i-1]
@@ -118,8 +133,10 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
             above_local = max(0.0, val - local_averages[i])
             spike_magnitude = max(0.0, diff) + above_local
             
-            # Final score weighting
-            final_score = 0.6 * val + 0.4 * spike_magnitude
+            # Final score weighting:
+            # Tingkatkan bobot spike (0.6) agar lebih memilih momen viral/lonjakan
+            # daripada adegan datar (boring) yang hanya memiliki retensi tinggi.
+            final_score = 0.4 * val + 0.6 * spike_magnitude
             
             if final_score >= min_score:
                 duration_cap = max_duration if max_duration > 0 else 999999.0
@@ -130,6 +147,37 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
                 })
         except Exception:
             continue
+
+    # Fallback: jika tidak ada segmen yang lolos min_score, tapi data heatmap ada,
+    # jalankan ulang dengan min_score = 0.0 agar selalu mendapat segmen terbaik.
+    if not enhanced_segments and heatmap_raw:
+        for i in range(n):
+            try:
+                marker = heatmap_raw[i]
+                start = float(marker.get("start_time", 0))
+                end = float(marker.get("end_time", 0))
+                val = values[i]
+                
+                if start < intro_threshold or start > outro_threshold:
+                    continue
+                    
+                if i > 0:
+                    diff = val - values[i-1]
+                else:
+                    diff = 0.0
+                    
+                above_local = max(0.0, val - local_averages[i])
+                spike_magnitude = max(0.0, diff) + above_local
+                final_score = 0.4 * val + 0.6 * spike_magnitude
+                
+                duration_cap = max_duration if max_duration > 0 else 999999.0
+                enhanced_segments.append({
+                    "start": start,
+                    "duration": min(end - start, duration_cap),
+                    "score": final_score
+                })
+            except Exception:
+                continue
             
     return enhanced_segments
 
@@ -988,25 +1036,11 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
     """
     Perform Auto Face Tracking Smart Crop using OpenCV.
     Decodes the input video frame-by-frame, tracks the presenter's face using a hybrid
-    ROI frontal/profile face detection logic, calculates a smooth bounding box center,
+    YuNet DNN and ROI frontal/profile face detection logic, calculates a smooth bounding box center,
     crops, resizes to out_width x out_height, and encodes the output video (silent).
     """
     if cv2 is None:
         raise RuntimeError("OpenCV (opencv-python) tidak terinstall. Silakan jalankan 'pip install opencv-python'.")
-
-    # Load Cascade Classifiers
-    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-    if face_cascade.empty():
-        if os.path.exists("haarcascade_frontalface_default.xml"):
-            face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-        else:
-            raise RuntimeError("Haar Cascade Frontal Face XML tidak ditemukan.")
-
-    profile_cascade_path = cv2.data.haarcascades + "haarcascade_profileface.xml"
-    profile_cascade = cv2.CascadeClassifier(profile_cascade_path)
-    if profile_cascade.empty() and os.path.exists("haarcascade_profileface.xml"):
-        profile_cascade = cv2.CascadeClassifier("haarcascade_profileface.xml")
 
     # Parse config
     if config is None:
@@ -1016,6 +1050,50 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
     tracking_speed = int(config.get("tracking_speed", 15))
     relock_timeout = int(config.get("relock_timeout", 30))
     crop_padding = float(config.get("crop_padding", 0.10))
+
+    # Initialize Face Detectors
+    # 1. Try YuNet DNN Face Detector first
+    yunet_model_path = "face_detection_yunet_2023mar.onnx"
+    yunet_available = False
+    detector = None
+
+    if hasattr(cv2, 'FaceDetectorYN'):
+        if not os.path.exists(yunet_model_path):
+            print("  Downloading YuNet face detection model...")
+            try:
+                import urllib.request
+                url = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+                urllib.request.urlretrieve(url, yunet_model_path)
+                print("  YuNet model downloaded successfully.")
+            except Exception as e:
+                print(f"  Gagal mendownload YuNet model: {e}. Menggunakan Haar Cascade.")
+        
+        if os.path.exists(yunet_model_path):
+            try:
+                # Initialize with a dummy size, we will resize it dynamically per frame if needed
+                detector = cv2.FaceDetectorYN.create(yunet_model_path, "", (320, 320))
+                yunet_available = True
+                print("  Using YuNet DNN Face Detector (More accurate)")
+            except Exception as e:
+                print(f"  Gagal memuat YuNet model: {e}. Menggunakan Haar Cascade.")
+
+    # 2. Setup Haar Cascade Classifiers as fallback or primary if YuNet is unavailable
+    face_cascade = None
+    profile_cascade = None
+    if not yunet_available:
+        print("  Using Haar Cascade Face Detector (Legacy)")
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        if face_cascade.empty():
+            if os.path.exists("haarcascade_frontalface_default.xml"):
+                face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+            else:
+                raise RuntimeError("Haar Cascade Frontal Face XML tidak ditemukan.")
+
+        profile_cascade_path = cv2.data.haarcascades + "haarcascade_profileface.xml"
+        profile_cascade = cv2.CascadeClassifier(profile_cascade_path)
+        if profile_cascade.empty() and os.path.exists("haarcascade_profileface.xml"):
+            profile_cascade = cv2.CascadeClassifier("haarcascade_profileface.xml")
 
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
@@ -1090,102 +1168,166 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
             face_found = False
             face_x, face_y, face_w, face_h = 0, 0, 0, 0
 
-            # 1. Search in ROI around last known face location (faster & prevents drifting)
-            if last_face_bbox is not None:
-                lx, ly, lw, lh = last_face_bbox
-                # Define ROI expanded by 2.5x around the center
-                roi_w = int(lw * 2.5)
-                roi_h = int(lh * 2.5)
-                roi_x = int((lx + lw/2.0) - roi_w/2.0)
-                roi_y = int((ly + lh/2.0) - roi_h/2.0)
-                
-                # Clamp ROI boundaries to frame
-                roi_x = max(0, min(w_orig - 50, roi_x))
-                roi_y = max(0, min(h_orig - 50, roi_y))
-                roi_w = max(50, min(w_orig - roi_x, roi_w))
-                roi_h = max(50, min(h_orig - roi_y, roi_h))
-                
-                gray_roi = gray[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
-                
-                # Detect frontal face in ROI
-                faces_detected = face_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                faces = [tuple(f) for f in faces_detected] if len(faces_detected) > 0 else []
-                
-                # Fallback to profile face in ROI if frontal face fails
-                if len(faces) == 0 and not profile_cascade.empty():
-                    # Left-profile
-                    faces_p = profile_cascade.detectMultiScale(gray_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                    if len(faces_p) > 0:
-                        faces.extend([tuple(f) for f in faces_p])
-                    
-                    # Right-profile (flipped)
-                    flipped_roi = cv2.flip(gray_roi, 1)
-                    faces_pf = profile_cascade.detectMultiScale(flipped_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                    if len(faces_pf) > 0:
-                        for (fx, fy, fw, fh) in faces_pf:
-                            mapped_x = roi_w - fx - fw
-                            faces.append((mapped_x, fy, fw, fh))
-                
-                if len(faces) > 0:
-                    # Choose face closest to ROI center (the previous face position)
-                    roi_cx, roi_cy = roi_w / 2.0, roi_h / 2.0
-                    best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - roi_cx)**2 + (f[1]+f[3]/2.0 - roi_cy)**2)
-                    
-                    face_x = best_face[0] + roi_x
-                    face_y = best_face[1] + roi_y
-                    face_w = best_face[2]
-                    face_h = best_face[3]
-                    face_found = True
-
-            # 2. Fallback to Full Frame face detection if not found in ROI (or first frame)
-            if not face_found:
+            # --- DETECT USING YUNET (PRIMARY) ---
+            if yunet_available and detector is not None:
+                # Resize frame to a fixed height (e.g. 360) for fast deep learning inference
                 scale_ratio = 1.0
-                if gray.shape[0] > 360:
-                    scale_ratio = 360.0 / gray.shape[0]
-                    small_gray = cv2.resize(gray, (0, 0), fx=scale_ratio, fy=scale_ratio)
+                if frame.shape[0] > 360:
+                    scale_ratio = 360.0 / frame.shape[0]
+                    w_small = int(frame.shape[1] * scale_ratio)
+                    h_small = int(frame.shape[0] * scale_ratio)
+                    small_frame = cv2.resize(frame, (w_small, h_small))
                 else:
-                    small_gray = gray
+                    small_frame = frame
+                    w_small = frame.shape[1]
+                    h_small = frame.shape[0]
 
-                # Detect faces
-                faces_detected = face_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                faces = [tuple(f) for f in faces_detected] if len(faces_detected) > 0 else []
-                
-                if len(faces) == 0 and not profile_cascade.empty():
-                    # Left-profile
-                    faces_p = profile_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                    if len(faces_p) > 0:
-                        faces.extend([tuple(f) for f in faces_p])
+                detector.setInputSize((w_small, h_small))
+                ret_yn, faces_yn = detector.detect(small_frame)
+
+                if faces_yn is not None and len(faces_yn) > 0:
+                    faces = []
+                    for f in faces_yn:
+                        fx = int(f[0] / scale_ratio)
+                        fy = int(f[1] / scale_ratio)
+                        fw = int(f[2] / scale_ratio)
+                        fh = int(f[3] / scale_ratio)
+                        score = f[14]
+                        # Score threshold: only accept confident detections (>0.5)
+                        if score > 0.5:
+                            faces.append((fx, fy, fw, fh))
+
+                    if len(faces) > 0:
+                        # Choose face closest to last known position if available, else the largest
+                        if last_face_bbox is not None:
+                            last_cx = last_face_bbox[0] + last_face_bbox[2]/2.0
+                            last_cy = last_face_bbox[1] + last_face_bbox[3]/2.0
+                            best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx)**2 + (f[1]+f[3]/2.0 - last_cy)**2)
+                        else:
+                            best_face = max(faces, key=lambda f: f[2] * f[3])
+
+                        face_x, face_y, face_w, face_h = best_face
+                        # Clamp to boundaries
+                        face_x = max(0, min(w_orig - 1, face_x))
+                        face_y = max(0, min(h_orig - 1, face_y))
+                        face_w = max(10, min(w_orig - face_x, face_w))
+                        face_h = max(10, min(h_orig - face_y, face_h))
+                        face_found = True
+
+            # --- DETECT USING HAAR CASCADES (FALLBACK) ---
+            if not face_found and face_cascade is not None:
+                # 1. Search in ROI around last known face location (faster & prevents drifting)
+                if last_face_bbox is not None:
+                    lx, ly, lw, lh = last_face_bbox
+                    # Define ROI expanded by 2.5x around the center
+                    roi_w = int(lw * 2.5)
+                    roi_h = int(lh * 2.5)
+                    roi_x = int((lx + lw/2.0) - roi_w/2.0)
+                    roi_y = int((ly + lh/2.0) - roi_h/2.0)
                     
-                    # Right-profile (flipped)
-                    flipped_small = cv2.flip(small_gray, 1)
-                    faces_pf = profile_cascade.detectMultiScale(flipped_small, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                    if len(faces_pf) > 0:
-                        w_small = small_gray.shape[1]
-                        for (fx, fy, fw, fh) in faces_pf:
-                            mapped_x = w_small - fx - fw
-                            faces.append((mapped_x, fy, fw, fh))
-                
-                if len(faces) > 0:
-                    # Choose face closest to last known position if available, else the largest
-                    if last_face_bbox is not None:
-                        last_cx_small = (last_face_bbox[0] + last_face_bbox[2]/2.0) * scale_ratio
-                        last_cy_small = (last_face_bbox[1] + last_face_bbox[3]/2.0) * scale_ratio
-                        best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx_small)**2 + (f[1]+f[3]/2.0 - last_cy_small)**2)
+                    # Clamp ROI boundaries to frame
+                    roi_x = max(0, min(w_orig - 50, roi_x))
+                    roi_y = max(0, min(h_orig - 50, roi_y))
+                    roi_w = max(50, min(w_orig - roi_x, roi_w))
+                    roi_h = max(50, min(h_orig - roi_y, roi_h))
+                    
+                    gray_roi = gray[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
+                    
+                    # Constrain search min/max size dynamically based on last face size
+                    min_face_size = max(30, int(lw * 0.5))
+                    max_face_size = int(lw * 2.0)
+
+                    # Detect frontal face in ROI
+                    faces_detected = face_cascade.detectMultiScale(
+                        gray_roi, scaleFactor=1.1, minNeighbors=6, 
+                        minSize=(min_face_size, min_face_size),
+                        maxSize=(max_face_size, max_face_size)
+                    )
+                    faces = [tuple(f) for f in faces_detected] if len(faces_detected) > 0 else []
+                    
+                    # Fallback to profile face in ROI if frontal face fails
+                    if len(faces) == 0 and not profile_cascade.empty():
+                        # Left-profile
+                        faces_p = profile_cascade.detectMultiScale(
+                            gray_roi, scaleFactor=1.1, minNeighbors=6, 
+                            minSize=(min_face_size, min_face_size),
+                            maxSize=(max_face_size, max_face_size)
+                        )
+                        if len(faces_p) > 0:
+                            faces.extend([tuple(f) for f in faces_p])
+                        
+                        # Right-profile (flipped)
+                        flipped_roi = cv2.flip(gray_roi, 1)
+                        faces_pf = profile_cascade.detectMultiScale(
+                            flipped_roi, scaleFactor=1.1, minNeighbors=6, 
+                            minSize=(min_face_size, min_face_size),
+                            maxSize=(max_face_size, max_face_size)
+                        )
+                        if len(faces_pf) > 0:
+                            for (fx, fy, fw, fh) in faces_pf:
+                                mapped_x = roi_w - fx - fw
+                                faces.append((mapped_x, fy, fw, fh))
+                    
+                    if len(faces) > 0:
+                        # Choose face closest to ROI center (the previous face position)
+                        roi_cx, roi_cy = roi_w / 2.0, roi_h / 2.0
+                        best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - roi_cx)**2 + (f[1]+f[3]/2.0 - roi_cy)**2)
+                        
+                        face_x = best_face[0] + roi_x
+                        face_y = best_face[1] + roi_y
+                        face_w = best_face[2]
+                        face_h = best_face[3]
+                        face_found = True
+
+                # 2. Fallback to Full Frame face detection if not found in ROI (or first frame)
+                if not face_found:
+                    scale_ratio = 1.0
+                    if gray.shape[0] > 360:
+                        scale_ratio = 360.0 / gray.shape[0]
+                        small_gray = cv2.resize(gray, (0, 0), fx=scale_ratio, fy=scale_ratio)
                     else:
-                        best_face = max(faces, key=lambda f: f[2] * f[3])
+                        small_gray = gray
+
+                    # Detect faces
+                    faces_detected = face_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=6, minSize=(30, 30))
+                    faces = [tuple(f) for f in faces_detected] if len(faces_detected) > 0 else []
                     
-                    face_x = int(best_face[0] / scale_ratio)
-                    face_y = int(best_face[1] / scale_ratio)
-                    face_w = int(best_face[2] / scale_ratio)
-                    face_h = int(best_face[3] / scale_ratio)
+                    if len(faces) == 0 and not profile_cascade.empty():
+                        # Left-profile
+                        faces_p = profile_cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=6, minSize=(30, 30))
+                        if len(faces_p) > 0:
+                            faces.extend([tuple(f) for f in faces_p])
+                        
+                        # Right-profile (flipped)
+                        flipped_small = cv2.flip(small_gray, 1)
+                        faces_pf = profile_cascade.detectMultiScale(flipped_small, scaleFactor=1.1, minNeighbors=6, minSize=(30, 30))
+                        if len(faces_pf) > 0:
+                            w_small = small_gray.shape[1]
+                            for (fx, fy, fw, fh) in faces_pf:
+                                mapped_x = w_small - fx - fw
+                                faces.append((mapped_x, fy, fw, fh))
                     
-                    # Clamp to boundaries
-                    face_x = max(0, min(w_orig - 1, face_x))
-                    face_y = max(0, min(h_orig - 1, face_y))
-                    face_w = max(10, min(w_orig - face_x, face_w))
-                    face_h = max(10, min(h_orig - face_y, face_h))
-                    
-                    face_found = True
+                    if len(faces) > 0:
+                        # Choose face closest to last known position if available, else the largest
+                        if last_face_bbox is not None:
+                            last_cx_small = (last_face_bbox[0] + last_face_bbox[2]/2.0) * scale_ratio
+                            last_cy_small = (last_face_bbox[1] + last_face_bbox[3]/2.0) * scale_ratio
+                            best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx_small)**2 + (f[1]+f[3]/2.0 - last_cy_small)**2)
+                        else:
+                            best_face = max(faces, key=lambda f: f[2] * f[3])
+                        
+                        face_x = int(best_face[0] / scale_ratio)
+                        face_y = int(best_face[1] / scale_ratio)
+                        face_w = int(best_face[2] / scale_ratio)
+                        face_h = int(best_face[3] / scale_ratio)
+                        
+                        # Clamp to boundaries
+                        face_x = max(0, min(w_orig - 1, face_x))
+                        face_y = max(0, min(h_orig - 1, face_y))
+                        face_w = max(10, min(w_orig - face_x, face_w))
+                        face_h = max(10, min(h_orig - face_y, face_h))
+                        
+                        face_found = True
 
             # 3. Calculate target center point
             if face_found:
@@ -1225,20 +1367,31 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
             else:
                 target_move_y = current_cy
 
-            # 5. LERP smoothing
-            smooth_cx = current_cx + (target_move_x - current_cx) * smooth_factor
-            smooth_cy = current_cy + (target_move_y - current_cy) * smooth_factor
+            # 5. Scene change / Instant Lock detection
+            # Jika jarak antara target dan posisi saat ini sangat jauh (misal > 30% dari layar),
+            # ini menandakan pergantian kamera (scene change). Langsung auto-lock (snap).
+            jump_threshold_x = w_orig * 0.30
+            jump_threshold_y = h_orig * 0.30
 
-            # 6. Tracking speed constraint (maximum shift per frame)
-            movement_x = smooth_cx - current_cx
-            if abs(movement_x) > tracking_speed:
-                movement_x = max(-tracking_speed, min(tracking_speed, movement_x))
-            smooth_cx = current_cx + movement_x
+            # Only allow instant snap if a face was actually found in this frame
+            if face_found and (abs(target_move_x - current_cx) > jump_threshold_x or abs(target_move_y - current_cy) > jump_threshold_y):
+                smooth_cx = target_move_x
+                smooth_cy = target_move_y
+            else:
+                # LERP smoothing normal
+                smooth_cx = current_cx + (target_move_x - current_cx) * smooth_factor
+                smooth_cy = current_cy + (target_move_y - current_cy) * smooth_factor
 
-            movement_y = smooth_cy - current_cy
-            if abs(movement_y) > tracking_speed:
-                movement_y = max(-tracking_speed, min(tracking_speed, movement_y))
-            smooth_cy = current_cy + movement_y
+                # 6. Tracking speed constraint (maximum shift per frame)
+                movement_x = smooth_cx - current_cx
+                if abs(movement_x) > tracking_speed:
+                    movement_x = max(-tracking_speed, min(tracking_speed, movement_x))
+                smooth_cx = current_cx + movement_x
+
+                movement_y = smooth_cy - current_cy
+                if abs(movement_y) > tracking_speed:
+                    movement_y = max(-tracking_speed, min(tracking_speed, movement_y))
+                smooth_cy = current_cy + movement_y
 
             # 7. Clamp to boundaries (avoid crop going out of bounds)
             left = int(smooth_cx - w_crop / 2.0)

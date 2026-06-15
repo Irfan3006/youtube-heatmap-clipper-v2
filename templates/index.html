@@ -21,23 +21,9 @@
           <div class="sub" data-i18n="top.tagline">Scan Most Replayed, potong otomatis, subtitle rapi.</div>
         </div>
         <div class="topRight">
-          <div class="langSwitch" role="group" aria-label="Language">
+          <div class="langSwitch hide" style="display: none;" role="group" aria-label="Language">
             <button id="langId" class="langBtn isActive" type="button" aria-label="Bahasa Indonesia" title="Bahasa Indonesia">
-              <svg class="flag" viewBox="0 0 36 24" aria-hidden="true">
-                <path d="M0 0h36v12H0z" fill="#CE1126"></path>
-                <path d="M0 12h36v12H0z" fill="#FFFFFF"></path>
-              </svg>
               <span>ID</span>
-            </button>
-            <button id="langEn" class="langBtn" type="button" aria-label="English" title="English">
-              <svg class="flag" viewBox="0 0 36 24" aria-hidden="true">
-                <path d="M0 0h36v24H0z" fill="#012169"></path>
-                <path d="M0 0l36 24M36 0L0 24" stroke="#FFF" stroke-width="6"></path>
-                <path d="M0 0l36 24M36 0L0 24" stroke="#C8102E" stroke-width="3"></path>
-                <path d="M18 0v24M0 12h36" stroke="#FFF" stroke-width="10"></path>
-                <path d="M18 0v24M0 12h36" stroke="#C8102E" stroke-width="6"></path>
-              </svg>
-              <span>EN</span>
             </button>
           </div>
           <a class="ghLink" href="https://github.com/naufaljct48" target="_blank" rel="noreferrer">
@@ -94,9 +80,9 @@
               <label class="label">Viral Sensitivity (Sensitivitas Viral)</label>
               <select id="viral_sensitivity" class="input">
                 <option value="low">Low (Hanya Spikes Besar)</option>
-                <option value="medium" selected>Medium (Standard / Seimbang)</option>
+                <option value="medium">Medium (Standard / Seimbang)</option>
                 <option value="high">High (Agresif Viral / Ambil Banyak Momen)</option>
-                <option value="extreme">Extreme (Sangat Agresif / Ambil Semua Momen)</option>
+                <option value="extreme" selected>Extreme (Sangat Agresif / Ambil Semua Momen)</option>
               </select>
               <div class="help">Makin tinggi sensitivitas, makin agresif program mendeteksi bagian viral.</div>
             </div>
@@ -223,10 +209,10 @@
           <div class="row">
             <label class="label" data-i18n="label.subtitle_style">Subtitle Style / Timing</label>
             <select id="subtitle_style" class="input">
-              <option value="sentence" selected data-i18n="opt.subtitle_style.sentence">Sentence / Full Sentence</option>
+              <option value="sentence" data-i18n="opt.subtitle_style.sentence">Sentence / Full Sentence</option>
               <option value="word_by_word" data-i18n="opt.subtitle_style.word_by_word">Word by Word</option>
               <option value="phrase_by_phrase" data-i18n="opt.subtitle_style.phrase_by_phrase">Phrase by Phrase</option>
-              <option value="karaoke" data-i18n="opt.subtitle_style.karaoke">Karaoke / Active Word Highlight</option>
+              <option value="karaoke" selected data-i18n="opt.subtitle_style.karaoke">Karaoke / Active Word Highlight</option>
               <option value="line_by_line" data-i18n="opt.subtitle_style.line_by_line">Line by Line</option>
             </select>
             <div class="help" data-i18n="help.subtitle_style">Timing kemunculan kata/kalimat subtitle di video.</div>

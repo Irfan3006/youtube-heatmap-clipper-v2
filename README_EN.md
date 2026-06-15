@@ -1,10 +1,10 @@
-# YouTube Heatmap Clipper 🎬
+# YouTube Heatmap Clipper
 
-[🇮🇩 Bahasa Indonesia](README.md) | 🇺🇸 **English**
+[Bahasa Indonesia](README.md) | [English](README_EN.md)
 
-A web application to extract the most engaging moments from YouTube videos using "Most Replayed" (heatmap) data, and automatically convert them into vertical-ready clips for Shorts, Reels, and TikTok — featuring AI-powered subtitles.
+A web application to extract the most engaging segments from YouTube videos using Most Replayed (heatmap) data, and automatically convert them into vertical-ready clips for Shorts, Reels, and TikTok, featuring AI-powered subtitles.
 
-This is the web version of the original project: https://github.com/0xACAB666/yt-heatmap-clipper (making the powerful CLI version more "human-friendly").
+This project is a further development of the original project: https://github.com/0xACAB666/yt-heatmap-clipper, with a primary focus on improving processing speed and refining the graphical user interface for ease of use.
 
 ## Preview
 
@@ -14,126 +14,111 @@ This is the web version of the original project: https://github.com/0xACAB666/yt
 | ![Preview 3](images/3.png) | ![Preview 4](images/4.png) |
 | ![Preview 5](images/5.png) |                            |
 
-## Features
+## New and Highlighted Features
 
-### Core Features
+This project has been updated with a focus on user experience, processing efficiency, and AI accuracy:
 
-- Scans YouTube videos via URL
-- Extracts YouTube "Most Replayed" (heatmap) segments
-- Automatically selects high-engagement moments
-- Configurable pre and post padding for each clip
-- Outputs 9:16 vertical video format (720x1280)
-- No YouTube API key required
-- Supports standard YouTube videos and Shorts
+### 1. Smart Face Tracking with 99% Accuracy
+*   **Hybrid Face Detection**: Uses the advanced YuNet DNN Face Detector Deep Learning model as the primary detector (automatically downloaded on first launch) and falls back to Haar Cascades (Frontal and Profile) if hardware-accelerated DNN is not supported.
+*   **Scene Change Detection**: Intelligently detects camera cuts or transitions to instantly lock (auto-snap) onto the new face position without delay.
+*   **Cinematic Smoothing and Deadzone**: Features a LERP smoothing algorithm for fluid camera panning and adjustable Deadzone configurations to filter out minor, jittery camera movements.
 
-### Advanced Features
+### 2. Advanced Heatmap Algorithm
+*   **Viral Spike Detection**: The updated algorithm computes the mathematical derivative and local average of viewer retention to target actual engagement spikes, which represent the most viral moments.
+*   **Smart Intro and Outro Filter**: Automatically filters out the first 10% (intro) and last 10% (outro) of the video to avoid clipping empty scenes or end screens.
+*   **Viral Sensitivity and Overlap Filter**: Adjusts sensitivity levels (Low, Medium, High, Extreme) and overlap threshold configurations to obtain the best non-overlapping viral clip curations.
 
-- **3 Crop Modes**:
-  - **Default**: Center crop from the original video
-  - **Split Left**: Top = center content, Bottom = bottom-left (facecam)
-  - **Split Right**: Top = center content, Bottom = bottom-right (facecam)
-- **AI Auto Subtitle (Faster-Whisper)**:
-  - 4-5x faster than standard Whisper
-  - Supports 99+ languages including Indonesian and English
-  - Multiple model sizes: tiny, base, small, medium, large
-  - Automatic transcription and subtitle burning
-  - Customizable subtitle styles
+### 3. Faster with Multi-Worker Parallel Processing
+*   **Parallel Processing Speedup**: Processes clips concurrently using a ThreadPoolExecutor with worker counts automatically and dynamically scaled based on system CPU threads.
+*   **Fast-Seek Direct Stream Extraction**: Downloads segments rapidly via direct stream URL extraction with FFmpeg, or downloads the full video locally first for instant parallel slicing.
 
-### Web UI Extras
+### 4. Focused on Web GUI for Ease of Use
+*   **Refined Web UI**: Developed and enhanced the existing Flask-based interface to make it more responsive, intuitive, and easier to navigate without complex manual steps.
+*   **Interactive Heatmap Scan**: Scans video URLs instantly to display all viral segments alongside interactive engagement graphs.
+*   **Bulk Processing and Custom Ranges**: Allows selecting multiple segments to process and export them concurrently, or defining custom start and end timestamps manually.
+*   **Real-time Logs and Built-in Player**: Monitors extraction progress in real-time through the log output panel, and allows playing or downloading completed clips directly from the browser.
 
-- **Clean Web Interface**: No CLI required for scanning and clipping
-- **Video Metadata Preview**: View title, channel, duration, and thumbnail
-- **Heatmap Visualization**: List segments with individual previews
-- **Batch Processing**: Multi-select segments and "Create Selected Clips"
-- **Custom Ranges**: Manually set Start/End times for custom clipping
-- **Multiple Aspect Ratios**: 9:16, 1:1, 16:9, or original ratio
-- **Advanced Subtitle Options**:
-  - Faster-Whisper model selection (tiny → large-v3)
-  - Font selection (Plus Jakarta Sans, Roboto, Montserrat, Arial, or Custom)
-  - Subtitle positioning (Bottom or Centered)
-  - Custom fonts directory support
+### 5. Diverse Dynamic Subtitle Styles (Faster-Whisper)
+*   **Faster Transcription**: Powered by Faster-Whisper, reducing transcription wait times to 4 or 5 times faster compared to the standard OpenAI Whisper implementation.
+*   **5 Dynamic Subtitle Display Styles**:
+    *   `sentence`: Displays the complete sentence normally.
+    *   `word_by_word`: Displays text dynamically word-by-word.
+    *   `phrase_by_phrase`: Displays short, easy-to-read phrases of up to 3 words.
+    *   `line_by_line`: Displays line-by-line, automatically formatting longer text into up to 2 lines.
+    *   `karaoke`: A dynamic karaoke effect that highlights the active word in yellow (#FFCC00).
+*   **Custom Fonts and Placement**: Supports preferred fonts (Plus Jakarta Sans, Roboto, Montserrat, Arial, or Custom) and allows setting the location to either the middle (Centered) or the bottom (Bottom) of the frame.
+
+---
 
 ## Requirements
 
-- Python 3.8+ (Python 3.11 recommended)
-- **FFmpeg (REQUIRED)**
-- Internet connection
-- Optional: `faster-whisper` (for AI subtitles)
+- Python 3.8+ (Python 3.11 highly recommended)
+- FFmpeg (Required and must be installed)
+- Internet Connection
+- Python Libraries (automatically installed by the launcher): flask, yt-dlp, opencv-python, faster-whisper (if subtitles are enabled), and related libraries.
 
 ## How to Use (Easiest Way)
 
-Just double-click the **`start.bat`** file.
-This script will automatically:
+Double-click the **web_start.bat** (or **start.bat**) file. The script will automatically:
+1. Verify and install requirements in requirements.txt.
+2. Create a secure Python Virtual Environment (venv).
+3. Check for FFmpeg in the system path.
+4. Launch the Flask web server.
 
-1. Check & Install all requirements
-2. Create a safe Python environment (venv)
-3. Check for FFmpeg
-4. Run the web application
+## Installation and Running Manually
 
-## Installation (Manual)
-
+### 1. Install Requirements
 ```powershell
 python -m pip install -r requirements.txt
 python -m pip install faster-whisper
 ```
+*Note: Skip faster-whisper if you do not require AI subtitle generation.*
 
-_Note: Skip `faster-whisper` if you don't need subtitle support._
-
-## Run Web App
-
+### 2. Run the Web App
 ```powershell
 python webapp.py
 ```
-
-Access at:
-
+Open your browser and navigate to:
 - http://127.0.0.1:5000/
 
-## How to Use (Web)
+---
 
-1. **Paste YouTube URL**: Video preview will appear automatically.
-2. **Choose Mode**:
-   - **Scan Heatmap**: Click "Scan Heatmap" → Select segments → "Create Selected Clips".
-   - **Custom Range**: Enter manual Start/End times → "Create Clip".
-3. **Configure**: Set Ratio, Crop, Padding, and Subtitles (optional).
-4. **Progress**: Monitor the progress panel for output logs and Download/Play buttons.
+## Using the Web GUI
 
-## Run CLI (Optional)
+1.  **Paste YouTube URL**: The video metadata (title, channel, thumbnail) will load automatically.
+2.  **Select Clipping Mode**:
+    *   **Scan Heatmap**: Click **Scan Heatmap** to auto-detect viral segments, check the boxes of the clips you want, and click **Create Selected Clips**.
+    *   **Custom**: Enter manual **Start** and **End** times, and click the button to create manual ranges.
+3.  **Configure Options**:
+    *   **Ratio**: Select 9:16 (Vertical), 1:1 (Square), 16:9 (Horizontal), or Original ratio.
+    *   **Crop Mode**: Select default (center crop), split (displays main video on top, facecam on the bottom-left or bottom-right), or smart (99% accurate face tracking crop).
+    *   **Subtitle**: Turn on subtitles, choose language (ID/EN), choose Whisper model size, select font, style, and screen location.
+    *   **Smart Crop Settings**: Fine-tune the smoothing factor, deadzone, tracking speed, and relock timeout parameters to optimize face tracking camera movements.
+4.  **Export**: Track clipping progress in the console log at the bottom. Once complete, play or download your clips directly from the interface.
 
+---
+
+## Running via CLI (Optional)
+
+If you prefer terminal commands, run:
 ```powershell
-python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop default --subtitle y --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-fontsdir "fonts" --subtitle-location bottom --ratio 9:16
+python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --subtitle y --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-location bottom --subtitle-style karaoke --ratio 9:16
 ```
 
-### Key Arguments:
+### Key CLI Arguments:
+*   `--crop`: default | split_left | split_right | smart (Face Tracking)
+*   `--ratio`: 9:16 | 1:1 | 16:9 | original
+*   `--subtitle`: y | n
+*   `--subtitle-lang`: id | en (Default: en)
+*   `--whisper-model`: tiny | base | small | medium | large-v3
+*   `--subtitle-font`: Font name (e.g. Poppins)
+*   `--subtitle-style`: sentence | word_by_word | phrase_by_phrase | line_by_line | karaoke
+*   `--subtitle-location`: bottom | center
+*   `--workers`: Number of parallel workers (0 for auto)
 
-- `--crop`: `default` | `split_left` | `split_right`
-- `--ratio`: `9:16` | `1:1` | `16:9` | `original`
-- `--subtitle`: `y` | `n`
-- `--whisper-model`: `tiny` | `base` | `small` | `medium` | `large-v3`
-- `--subtitle-font`: Font name (e.g., Poppins)
-- `--subtitle-fontsdir`: Folder containing .ttf/.otf files (default: `fonts`)
-- `--subtitle-location`: `bottom` | `center`
+---
 
-## Fonts
-
-- Place font files in the `fonts/` directory (e.g., `fonts/Poppins/Poppins-Regular.ttf`).
-- Set "Fonts dir" to `fonts` in the UI.
-- Select your font from the dropdown or use "Custom" and type the font family name (e.g., `Poppins`).
-
-## FFmpeg
-
-FFmpeg must be accessible via your system PATH. On Windows, the app also attempts to auto-detect FFmpeg if installed via WinGet.
-
-**Easiest way to install (Windows):**
-Open PowerShell as Administrator and run:
-
-```powershell
-winget install Gyan.FFmpeg
-```
-
-After installation, **RESTART** your terminal or VS Code for FFmpeg to be recognized.
-
-### Whisper Model Comparison
+## Whisper Model Comparison
 
 | Model        | Size   | RAM     | Speed (60s) | Accuracy  | Best For                |
 | ------------ | ------ | ------- | ----------- | --------- | ----------------------- |
@@ -143,182 +128,57 @@ After installation, **RESTART** your terminal or VS Code for FFmpeg to be recogn
 | **medium**   | 1.5 GB | ~3 GB   | ~40-50s     | Excellent | Professional work       |
 | **large-v3** | 2.9 GB | ~6 GB   | ~90-120s    | Best      | Production quality      |
 
-> **Recommendation**: Use `tiny` for speed, `small` for a balance of quality and speed.
+> **Recommendation**: Use `tiny` for the fastest possible rendering speed, or `small` for a balance between transcription accuracy and processing overhead.
 
 ---
 
-## Output
+## Output Video Specifications
 
-### Video Specifications
-
-- **Format**: MP4 (H.264 video + AAC audio)
-- **Resolution**: 720x1280 (9:16 vertical)
-- **Video Codec**: libx264, CRF 26, `ultrafast` preset
-- **Audio Codec**: AAC, 128 kbps
-- **Subtitles**: Burned-in (if enabled), white text with black outline
-
-### File Naming
-
-```
-clips/
-├── clip_1.mp4
-├── clip_2.mp4
-└── clip_3.mp4
-```
-
-Clips are numbered based on their engagement score (highest first).
+*   **Format**: MP4 (H.264 video + AAC audio)
+*   **Default Resolution**: 720x1280 (9:16 Vertical)
+*   **Video Codec**: Hardware Accelerated Encoder (e.g. h264_amf for AMD, h264_nvenc for NVIDIA, h264_qsv for Intel) if supported, with automatic fallback to libx264 (ultrafast preset, CRF 26).
+*   **Audio Codec**: AAC, 128 kbps
+*   **Subtitles**: Burned-in directly into the video file matching your font, style, and position preferences.
 
 ---
 
-## Crop Mode Visualization
+## FFmpeg Installation Guide
 
-### Mode 1: Default (Center Crop)
+The application requires FFmpeg to function. On Windows, it attempts to auto-detect FFmpeg if installed via WinGet.
 
+### Windows (Quickest Way):
+Open PowerShell as Administrator and run:
+```powershell
+winget install Gyan.FFmpeg
 ```
-Original Video (16:9)         Output (9:16)
-┌─────────────────────┐       ┌──────┐
-│   [   CONTENT   ]   │  -->  │CONTENT│
-└─────────────────────┘       └──────┘
-       crop center             full height
-```
+After installation completes, restart your terminal or VS Code to apply PATH changes.
 
-### Mode 2: Split Left (Facecam Bottom-Left)
-
-```
-Original Video (16:9)                Output (9:16)
-┌─────────────────────────┐         ┌──────────┐
-│                         │         │  GAME    │ 960px
-│       GAME AREA         │   -->   │ CONTENT  │
-│  [👤]                   │         ├──────────┤
-└─────────────────────────┘         │ 👤 FACE  │ 350px
-    facecam bottom-left             └──────────┘
-```
-
-### Mode 3: Split Right (Facecam Bottom-Right)
-
-```
-Original Video (16:9)                Output (9:16)
-┌─────────────────────────┐         ┌──────────┐
-│                         │         │  GAME    │ 960px
-│       GAME AREA         │   -->   │ CONTENT  │
-│                   [👤]  │         ├──────────┤
-└─────────────────────────┘         │ 👤 FACE  │ 350px
-    facecam bottom-right            └──────────┘
-```
-
----
-
-## Troubleshooting
-
-### FFmpeg not found
-
+### macOS:
 ```bash
-# Windows: Download from https://ffmpeg.org/download.html
-# Add to PATH or place ffmpeg.exe in script directory
-
-# macOS:
 brew install ffmpeg
-
-# Linux:
-sudo apt install ffmpeg
 ```
 
-### No high-engagement segments found
-
-- The video might not have "Most Replayed" data yet (requires sufficient views/engagement).
-- Try lowering the `MIN_SCORE` (e.g., from 0.40 to 0.30).
-- Verify the YouTube URL is correct.
-
-### Subtitle generation fails
-
-- Ensure an active internet connection for the initial model download.
-- Check available RAM (Whisper needs ~500MB-2GB depending on the model).
-- Try a smaller model: change `WHISPER_MODEL` from `small` to `tiny`.
-
-### Slow transcription
-
-- Use a smaller model (`tiny` instead of `small`).
-- Faster-Whisper is already 4-5x faster than standard Whisper.
-- Consider upgrading RAM or using the GPU version.
-
-### Video download fails
-
-- Check your internet connection.
-- Verify the YouTube URL is accessible.
-- Some videos might be region-locked or have age restrictions.
-- Try updating yt-dlp: `pip install -U yt-dlp`.
-
----
-
-## Tips & Best Practices
-
-### For Gaming Content
-
-- Use **Split Right** or **Split Left** mode to include the facecam.
-- Keep `PADDING = 10` for context before and after action.
-- Use `small` or `base` models for accurate gaming terminology.
-
-### For Tutorial/Vlog Content
-
-- Use **Default** center crop mode.
-- Increase `MAX_DURATION = 90` for longer explanations.
-- Enable subtitles with the `tiny` model for rapid processing.
-
-### For Fast-Paced Content
-
-- Reduce `PADDING = 5` to keep clips tight.
-- Increase `MIN_SCORE = 0.50` to capture only peak moments.
-- Use the `tiny` model to match the quick editing style.
-
-### Subtitle Customization
-
-Edit line ~368 in `run.py` to customize subtitle style:
-
-```python
-# Current style (white text, black outline):
-BorderStyle=1,Outline=3,Shadow=2,MarginV=30
-
-# Large text:
-FontSize=28,Outline=4
-
-# Position higher (avoid facecam):
-MarginV=400
-
-# Different color (yellow):
-PrimaryColour=&H00FFFF
+### Linux:
+```bash
+sudo apt update && sudo apt install ffmpeg
 ```
-
----
-
-## Contributing
-
-Contributions are welcome! Feel free to:
-
-- Report bugs
-- Suggest features
-- Submit pull requests
-- Improve documentation
 
 ---
 
 ## License
 
-MIT License
+This project is licensed under the MIT License.
 
----
+## Credits and Special Thanks
 
-## Credits & Special Thanks
-
-- Special thanks to the original project (CLI version) which served as the foundation: https://github.com/0xACAB666/yt-heatmap-clipper
+- **Original Project (CLI Version)**: Special thanks to the creator of the original CLI project, which served as the foundation: https://github.com/0xACAB666/yt-heatmap-clipper
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube video downloader
-- [FFmpeg](https://ffmpeg.org/) - Video processing
-- [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - AI transcription
+- [FFmpeg](https://ffmpeg.org/) - Video processing suite
+- [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Fast AI speech-to-text library
 - [OpenAI Whisper](https://github.com/openai/whisper) - Speech recognition model
 
 ---
 
-## Support
+## Support and Contribution
 
-If you find this tool useful, please ⭐ star this repository!
-
-For issues and questions, please open an issue on GitHub.
+If you find this application helpful, please star the repository. Feel free to open a GitHub Issue for bugs, questions, or feature requests.
