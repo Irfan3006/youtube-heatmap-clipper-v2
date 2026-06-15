@@ -180,7 +180,7 @@ Proyek ini dilisensikan di bawah MIT License.
 
 ## Kredit dan Apresiasi
 
-- **Proyek Original (CLI Version)**: Apresiasi kepada pembuat proyek asli yang menjadi fondasi utama pengembangan aplikasi ini: https://github.com/0xACAB666/yt-heatmap-clipper
+- **Proyek Original**: Apresiasi kepada pembuat proyek asli yang menjadi fondasi utama pengembangan aplikasi ini: https://github.com/0xACAB666/yt-heatmap-clipper
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Alat pengunduh media YouTube
 - [FFmpeg](https://ffmpeg.org/) - Kakas pemrosesan multimedia
 - [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Pustaka transkripsi audio AI cepat

@@ -180,7 +180,7 @@ This project is licensed under the MIT License.
 
 ## Credits and Special Thanks
 
-- **Original Project (CLI Version)**: Special thanks to the creator of the original CLI project, which served as the foundation: https://github.com/0xACAB666/yt-heatmap-clipper
+- **Original Project**: Special thanks to the creator of the original CLI project, which served as the foundation: https://github.com/0xACAB666/yt-heatmap-clipper
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube video downloader
 - [FFmpeg](https://ffmpeg.org/) - Video processing suite
 - [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Fast AI speech-to-text library
