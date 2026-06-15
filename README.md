@@ -52,6 +52,15 @@ Proyek ini telah diperbarui secara menyeluruh untuk meningkatkan efisiensi pemro
 
 ## Persyaratan Sistem
 
+### Perangkat yang Didukung
+*   Aplikasi ini **hanya dapat dijalankan pada perangkat desktop atau laptop** (Windows, macOS, Linux) dan **tidak mendukung perangkat mobile** (Android, iOS).
+
+### Spesifikasi Perangkat Keras Minimal
+*   **Prosesor (CPU)**: Intel Core i3 / AMD Ryzen 3 atau setara (disarankan minimal 4 core untuk performa multi-worker yang baik).
+*   **Memori (RAM)**: minimal 4 GB (disarankan 8 GB ke atas jika menggunakan model subtitle AI ukuran sedang atau besar).
+*   **Penyimpanan**: minimal 5 GB ruang kosong (untuk menampung berkas video mentah sementara dan model transkripsi AI).
+
+### Persyaratan Perangkat Lunak
 - Python 3.8 ke atas (Python 3.11 sangat direkomendasikan)
 - FFmpeg (Diperlukan dan harus terpasang)
 - Koneksi Internet

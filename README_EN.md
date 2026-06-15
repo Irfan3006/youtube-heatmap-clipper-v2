@@ -52,6 +52,15 @@ This project has been updated with a focus on user experience, processing effici
 
 ## Requirements
 
+### Supported Devices
+*   This application **can only be run on desktop or laptop devices** (Windows, macOS, Linux) and **does not support mobile devices** (Android, iOS).
+
+### Minimum Hardware Specifications
+*   **Processor (CPU)**: Intel Core i3 / AMD Ryzen 3 or equivalent (minimum 4 cores recommended for good multi-worker performance).
+*   **Memory (RAM)**: 4 GB minimum (8 GB or more recommended if using medium or large AI subtitle models).
+*   **Storage**: 5 GB of free space minimum (to store temporary raw video files and AI transcription models).
+
+### Software Requirements
 - Python 3.8+ (Python 3.11 highly recommended)
 - FFmpeg (Required and must be installed)
 - Internet Connection
