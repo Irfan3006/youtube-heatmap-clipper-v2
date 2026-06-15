@@ -144,7 +144,7 @@ python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --su
 ## Spesifikasi Output Video
 
 *   **Format**: MP4 (H.264 video + AAC audio)
-*   **Resolusi Default**: 720x1280 (9:16 Vertikal)
+*   **Rasio Aspek yang Didukung**: 9:16 (720x1280), 1:1 (720x720), 16:9 (1280x720), atau menggunakan rasio dan resolusi asli video.
 *   **Video Codec**: Penggunaan encoder terakselerasi perangkat keras (seperti h264_amf untuk AMD, h264_nvenc untuk NVIDIA, h264_qsv untuk Intel) jika tersedia, dengan cadangan otomatis ke libx264 (preset ultrafast, CRF 26).
 *   **Audio Codec**: AAC, 128 kbps
 *   **Subtitles**: Tertanam langsung pada berkas video (burned-in) sesuai dengan font, gaya, dan tata letak yang dikonfigurasi.

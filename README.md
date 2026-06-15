@@ -144,7 +144,7 @@ python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --su
 ## Output Video Specifications
 
 *   **Format**: MP4 (H.264 video + AAC audio)
-*   **Default Resolution**: 720x1280 (9:16 Vertical)
+*   **Supported Aspect Ratios**: 9:16 (720x1280), 1:1 (720x720), 16:9 (1280x720), or the original video's resolution and ratio.
 *   **Video Codec**: Hardware Accelerated Encoder (e.g. h264_amf for AMD, h264_nvenc for NVIDIA, h264_qsv for Intel) if supported, with automatic fallback to libx264 (ultrafast preset, CRF 26).
 *   **Audio Codec**: AAC, 128 kbps
 *   **Subtitles**: Burned-in directly into the video file matching your font, style, and position preferences.
