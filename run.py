@@ -302,7 +302,8 @@ def parse_args():
     parser.add_argument(
         "--crop",
         choices=["default", "split_left", "split_right", "smart"],
-        help="Crop mode",
+        default="smart",
+        help="Crop mode (default: smart)",
     )
     parser.add_argument(
         "--subtitle",
@@ -1412,7 +1413,7 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
 
 
 
-def proses_satu_clip(video_id, item, index, total_duration, crop_mode="default", use_subtitle=False, event_hook=None, stream_urls=None, local_video_path=None, subtitle_lang="en", output_ratio=None, out_w=None, out_h=None, output_dir=None, job_id=None, smart_config=None, subtitle_style="sentence", max_duration=60):
+def proses_satu_clip(video_id, item, index, total_duration, crop_mode="smart", use_subtitle=False, event_hook=None, stream_urls=None, local_video_path=None, subtitle_lang="en", output_ratio=None, out_w=None, out_h=None, output_dir=None, job_id=None, smart_config=None, subtitle_style="sentence", max_duration=60):
     """
     Download, crop, and export a single vertical clip
     based on a heatmap segment.
@@ -1831,33 +1832,34 @@ def main():
     link = args.url
 
     if crop_mode is None or use_subtitle is None or not link:
-        print("\n=== Crop Mode ===")
-        print("1. Default (center crop)")
-        print("2. Split 1 (top: center, bottom: bottom-left (facecam))")
-        print("3. Split 2 (top: center, bottom: bottom-right ((facecam))")
-        print("4. Smart Crop (auto face tracking)")
+        if crop_mode is None:
+            print("\n=== Crop Mode ===")
+            print("1. Default (center crop)")
+            print("2. Split 1 (top: center, bottom: bottom-left (facecam))")
+            print("3. Split 2 (top: center, bottom: bottom-right ((facecam))")
+            print("4. Smart Crop (auto face tracking)")
 
-        while crop_mode is None:
-            choice = input("\nSelect crop mode (1-4): ").strip()
-            if choice == "1":
-                crop_mode = "default"
-                crop_desc = "Default center crop"
-                break
-            if choice == "2":
-                crop_mode = "split_left"
-                crop_desc = "Split crop (bottom-left facecam)"
-                break
-            if choice == "3":
-                crop_mode = "split_right"
-                crop_desc = "Split crop (bottom-right facecam)"
-                break
-            if choice == "4":
-                crop_mode = "smart"
-                crop_desc = "Smart crop (face tracking)"
-                break
-            print("Invalid choice. Please enter 1, 2, 3, or 4.")
+            while crop_mode is None:
+                choice = input("\nSelect crop mode (1-4): ").strip()
+                if choice == "1":
+                    crop_mode = "default"
+                    crop_desc = "Default center crop"
+                    break
+                if choice == "2":
+                    crop_mode = "split_left"
+                    crop_desc = "Split crop (bottom-left facecam)"
+                    break
+                if choice == "3":
+                    crop_mode = "split_right"
+                    crop_desc = "Split crop (bottom-right facecam)"
+                    break
+                if choice == "4":
+                    crop_mode = "smart"
+                    crop_desc = "Smart crop (face tracking)"
+                    break
+                print("Invalid choice. Please enter 1, 2, 3, or 4.")
 
-        print(f"Selected: {crop_desc}")
+            print(f"Selected: {crop_desc}")
 
         print("\n=== Auto Subtitle ===")
         print(f"Available model: {WHISPER_MODEL} (~{get_model_size(WHISPER_MODEL)})")

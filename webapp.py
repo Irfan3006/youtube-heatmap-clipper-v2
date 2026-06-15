@@ -91,7 +91,7 @@ def run_job(job_id, payload):
         if not url:
             raise ValueError("URL kosong")
 
-        crop = payload.get("crop") or "default"
+        crop = payload.get("crop") or "smart"
         ratio = payload.get("ratio") or "9:16"
         subtitle = bool(payload.get("subtitle"))
         subtitle_lang = payload.get("subtitle_lang") or "en"
