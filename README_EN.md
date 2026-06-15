@@ -4,7 +4,7 @@
 
 A web application to extract the most engaging segments from YouTube videos using Most Replayed (heatmap) data, and automatically convert them into vertical-ready clips for Shorts, Reels, and TikTok, featuring AI-powered subtitles.
 
-This project is a further development of the original project: https://github.com/0xACAB666/yt-heatmap-clipper, with a primary focus on improving processing speed and refining the graphical user interface for ease of use.
+This project is a further development of the project: https://github.com/naufaljct48/youtube-heatmap-clipper (which developed the GUI version and initial optimizations from the original project: https://github.com/0xACAB666/yt-heatmap-clipper), with a primary focus on improving processing speed (multi-worker), smart face tracking, dynamic subtitle styling, and refining the graphical user interface for ease of use.
 
 ## Preview
 
@@ -180,7 +180,8 @@ This project is licensed under the MIT License.
 
 ## Credits and Special Thanks
 
-- **Original Project**: Special thanks to the creator of the original CLI project, which served as the foundation: https://github.com/0xACAB666/yt-heatmap-clipper
+- **Original Project**: Special thanks to the creator of the original project: https://github.com/0xACAB666/yt-heatmap-clipper
+- **GUI Version & Initial Optimizations**: Special thanks to naufaljct48 who created the GUI version and initial optimizations: https://github.com/naufaljct48/youtube-heatmap-clipper
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube video downloader
 - [FFmpeg](https://ffmpeg.org/) - Video processing suite
 - [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Fast AI speech-to-text library

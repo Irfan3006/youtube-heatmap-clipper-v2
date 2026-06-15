@@ -4,7 +4,7 @@
 
 Aplikasi web untuk mengekstrak momen dengan tingkat interaksi tertinggi dari video YouTube berdasarkan data Most Replayed (heatmap), kemudian secara otomatis mengonversinya menjadi klip vertikal yang siap digunakan untuk Shorts, Reels, atau TikTok, lengkap dengan opsi subtitle berbasis kecerdasan buatan (AI).
 
-Proyek ini merupakan pengembangan lebih lanjut dari proyek orisinal: https://github.com/0xACAB666/yt-heatmap-clipper, dengan fokus utama pada peningkatan kecepatan pemrosesan dan penyederhanaan antarmuka grafis agar lebih mudah digunakan.
+Proyek ini merupakan pengembangan lebih lanjut dari proyek: https://github.com/naufaljct48/youtube-heatmap-clipper (yang mengembangkan versi GUI dan melakukan optimasi awal dari proyek orisinal: https://github.com/0xACAB666/yt-heatmap-clipper), dengan fokus utama pada peningkatan kecepatan pemrosesan (multi-worker), pelacakan wajah cerdas (smart face tracking), beragam opsi gaya subtitle dinamis, serta penyederhanaan antarmuka grafis agar lebih mudah digunakan.
 
 ## Preview
 
@@ -180,7 +180,8 @@ Proyek ini dilisensikan di bawah MIT License.
 
 ## Kredit dan Apresiasi
 
-- **Proyek Original**: Apresiasi kepada pembuat proyek asli yang menjadi fondasi utama pengembangan aplikasi ini: https://github.com/0xACAB666/yt-heatmap-clipper
+- **Proyek Original**: Apresiasi kepada pembuat proyek asli: https://github.com/0xACAB666/yt-heatmap-clipper
+- **Pengembangan GUI & Optimasi Awal**: Apresiasi kepada naufaljct48 yang mengembangkan versi GUI dan melakukan optimasi awal: https://github.com/naufaljct48/youtube-heatmap-clipper
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Alat pengunduh media YouTube
 - [FFmpeg](https://ffmpeg.org/) - Kakas pemrosesan multimedia
 - [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - Pustaka transkripsi audio AI cepat
