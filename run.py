@@ -5,6 +5,7 @@ import sys
 import subprocess
 import requests
 import shutil
+import math
 from urllib.parse import urlparse, parse_qs
 from types import SimpleNamespace
 import argparse
@@ -1051,6 +1052,7 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
     tracking_speed = int(config.get("tracking_speed", 15))
     relock_timeout = int(config.get("relock_timeout", 30))
     crop_padding = float(config.get("crop_padding", 0.10))
+    tracking_strategy = config.get("tracking_strategy", "hybrid")
 
     # Initialize Face Detectors
     # 1. Try YuNet DNN Face Detector first
@@ -1106,6 +1108,28 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps <= 0:
         fps = 30.0
+
+    diag = math.sqrt(w_orig**2 + h_orig**2)
+    def get_face_score(f, scale=1.0):
+        fx, fy, fw, fh = f
+        # Convert to original coordinates
+        fx = fx / scale
+        fy = fy / scale
+        fw = fw / scale
+        fh = fh / scale
+        
+        f_cx = fx + fw / 2.0
+        f_cy = fy + fh / 2.0
+        f_area = fw * fh
+        center_dist = math.sqrt((f_cx - w_orig / 2.0)**2 + (f_cy - h_orig / 2.0)**2)
+        norm_center_dist = center_dist / (diag / 2.0)
+        
+        if tracking_strategy == "largest":
+            return f_area
+        elif tracking_strategy == "center":
+            return 1.0 / (1.0 + norm_center_dist)
+        else: # "hybrid"
+            return f_area / (1.0 + 4.0 * norm_center_dist)
 
     # Handle start_time and end_time seeking
     if start_time > 0:
@@ -1199,21 +1223,29 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
                             faces.append((fx, fy, fw, fh))
 
                     if len(faces) > 0:
-                        # Choose face closest to last known position if available, else the largest
+                        # Choose face closest to last known position if available within distance threshold, else the strategy
                         if last_face_bbox is not None:
                             last_cx = last_face_bbox[0] + last_face_bbox[2]/2.0
                             last_cy = last_face_bbox[1] + last_face_bbox[3]/2.0
-                            best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx)**2 + (f[1]+f[3]/2.0 - last_cy)**2)
+                            closest_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx)**2 + (f[1]+f[3]/2.0 - last_cy)**2)
+                            dist = math.sqrt((closest_face[0]+closest_face[2]/2.0 - last_cx)**2 + (closest_face[1]+closest_face[3]/2.0 - last_cy)**2)
+                            if dist < diag * 0.25:
+                                best_face = closest_face
+                                face_found = True
+                            else:
+                                # Too far, treat as lost face (don't snap to spectator)
+                                face_found = False
                         else:
-                            best_face = max(faces, key=lambda f: f[2] * f[3])
+                            best_face = max(faces, key=lambda f: get_face_score(f, scale=1.0))
+                            face_found = True
 
-                        face_x, face_y, face_w, face_h = best_face
-                        # Clamp to boundaries
-                        face_x = max(0, min(w_orig - 1, face_x))
-                        face_y = max(0, min(h_orig - 1, face_y))
-                        face_w = max(10, min(w_orig - face_x, face_w))
-                        face_h = max(10, min(h_orig - face_y, face_h))
-                        face_found = True
+                        if face_found:
+                            face_x, face_y, face_w, face_h = best_face
+                            # Clamp to boundaries
+                            face_x = max(0, min(w_orig - 1, face_x))
+                            face_y = max(0, min(h_orig - 1, face_y))
+                            face_w = max(10, min(w_orig - face_x, face_w))
+                            face_h = max(10, min(h_orig - face_y, face_h))
 
             # --- DETECT USING HAAR CASCADES (FALLBACK) ---
             if not face_found and face_cascade is not None:
@@ -1274,11 +1306,21 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
                         roi_cx, roi_cy = roi_w / 2.0, roi_h / 2.0
                         best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - roi_cx)**2 + (f[1]+f[3]/2.0 - roi_cy)**2)
                         
-                        face_x = best_face[0] + roi_x
-                        face_y = best_face[1] + roi_y
-                        face_w = best_face[2]
-                        face_h = best_face[3]
-                        face_found = True
+                        temp_face_x = best_face[0] + roi_x
+                        temp_face_y = best_face[1] + roi_y
+                        temp_face_w = best_face[2]
+                        temp_face_h = best_face[3]
+                        
+                        last_cx = lx + lw/2.0
+                        last_cy = ly + lh/2.0
+                        dist = math.sqrt((temp_face_x + temp_face_w/2.0 - last_cx)**2 + (temp_face_y + temp_face_h/2.0 - last_cy)**2)
+                        
+                        if dist < diag * 0.25:
+                            face_x = temp_face_x
+                            face_y = temp_face_y
+                            face_w = temp_face_w
+                            face_h = temp_face_h
+                            face_found = True
 
                 # 2. Fallback to Full Frame face detection if not found in ROI (or first frame)
                 if not face_found:
@@ -1309,26 +1351,46 @@ def smart_crop_video(input_path, output_path, out_width=720, out_height=1280, co
                                 faces.append((mapped_x, fy, fw, fh))
                     
                     if len(faces) > 0:
-                        # Choose face closest to last known position if available, else the largest
+                        # Choose face closest to last known position if available within distance threshold, else the strategy
                         if last_face_bbox is not None:
                             last_cx_small = (last_face_bbox[0] + last_face_bbox[2]/2.0) * scale_ratio
                             last_cy_small = (last_face_bbox[1] + last_face_bbox[3]/2.0) * scale_ratio
-                            best_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx_small)**2 + (f[1]+f[3]/2.0 - last_cy_small)**2)
+                            closest_face = min(faces, key=lambda f: (f[0]+f[2]/2.0 - last_cx_small)**2 + (f[1]+f[3]/2.0 - last_cy_small)**2)
+                            
+                            # Convert back to original coordinates to calculate distance
+                            cf_x = int(closest_face[0] / scale_ratio)
+                            cf_y = int(closest_face[1] / scale_ratio)
+                            cf_w = int(closest_face[2] / scale_ratio)
+                            cf_h = int(closest_face[3] / scale_ratio)
+                            cf_cx = cf_x + cf_w / 2.0
+                            cf_cy = cf_y + cf_h / 2.0
+                            
+                            last_cx = last_face_bbox[0] + last_face_bbox[2]/2.0
+                            last_cy = last_face_bbox[1] + last_face_bbox[3]/2.0
+                            dist = math.sqrt((cf_cx - last_cx)**2 + (cf_cy - last_cy)**2)
+                            
+                            if dist < diag * 0.25:
+                                face_x = cf_x
+                                face_y = cf_y
+                                face_w = cf_w
+                                face_h = cf_h
+                                face_found = True
+                            else:
+                                face_found = False
                         else:
-                            best_face = max(faces, key=lambda f: f[2] * f[3])
+                            best_face = max(faces, key=lambda f: get_face_score(f, scale=scale_ratio))
+                            face_x = int(best_face[0] / scale_ratio)
+                            face_y = int(best_face[1] / scale_ratio)
+                            face_w = int(best_face[2] / scale_ratio)
+                            face_h = int(best_face[3] / scale_ratio)
+                            face_found = True
                         
-                        face_x = int(best_face[0] / scale_ratio)
-                        face_y = int(best_face[1] / scale_ratio)
-                        face_w = int(best_face[2] / scale_ratio)
-                        face_h = int(best_face[3] / scale_ratio)
-                        
-                        # Clamp to boundaries
-                        face_x = max(0, min(w_orig - 1, face_x))
-                        face_y = max(0, min(h_orig - 1, face_y))
-                        face_w = max(10, min(w_orig - face_x, face_w))
-                        face_h = max(10, min(h_orig - face_y, face_h))
-                        
-                        face_found = True
+                        if face_found:
+                            # Clamp to boundaries
+                            face_x = max(0, min(w_orig - 1, face_x))
+                            face_y = max(0, min(h_orig - 1, face_y))
+                            face_w = max(10, min(w_orig - face_x, face_w))
+                            face_h = max(10, min(h_orig - face_y, face_h))
 
             # 3. Calculate target center point
             if face_found:
@@ -1431,7 +1493,8 @@ def proses_satu_clip(video_id, item, index, total_duration, crop_mode="smart", u
             "deadzone_size": 0.15,
             "tracking_speed": 15,
             "relock_timeout": 150,
-            "crop_padding": 0.10
+            "crop_padding": 0.10,
+            "tracking_strategy": "hybrid"
         }
     start_original = item["start"]
     end_original = item["start"] + item["duration"]

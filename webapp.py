@@ -113,7 +113,8 @@ def run_job(job_id, payload):
             "deadzone_size": float(payload.get("smart_deadzone_size") or 0.15),
             "tracking_speed": int(payload.get("smart_tracking_speed") or 15),
             "relock_timeout": int(payload.get("smart_relock_timeout") or 150),
-            "crop_padding": float(payload.get("smart_crop_padding") or 0.10)
+            "crop_padding": float(payload.get("smart_crop_padding") or 0.10),
+            "tracking_strategy": payload.get("smart_tracking_strategy") or "hybrid"
         }
 
         # Read viral sensitivity and overlap threshold

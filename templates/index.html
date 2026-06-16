@@ -157,7 +157,7 @@
               <div class="help">Batas kecepatan gerakan kamera per frame (px).</div>
             </div>
           </div>
-          <div class="grid2" style="margin-top: 8px;">
+          <div class="grid3" style="margin-top: 8px;">
             <div class="row">
               <label class="label">Relock Timeout (frames)</label>
               <input id="smart_relock_timeout" class="input" type="number" min="1" max="600" value="150" />
@@ -167,6 +167,15 @@
               <label class="label">Crop Padding</label>
               <input id="smart_crop_padding" class="input" type="number" min="0.0" max="0.5" step="0.01" value="0.10" />
               <div class="help">Padding ekstra di sekitar wajah (0% - 50%).</div>
+            </div>
+            <div class="row">
+              <label class="label" data-i18n="label.smart_tracking_strategy">Tracking Strategy</label>
+              <select id="smart_tracking_strategy" class="input">
+                <option value="hybrid" selected data-i18n="opt.smart_tracking_strategy.hybrid">Hybrid / Presenter (Recommended)</option>
+                <option value="center" data-i18n="opt.smart_tracking_strategy.center">Center Face Only</option>
+                <option value="largest" data-i18n="opt.smart_tracking_strategy.largest">Largest Face Only</option>
+              </select>
+              <div class="help" data-i18n="help.smart_tracking_strategy">Strategi memilih wajah jika ada banyak orang di video.</div>
             </div>
           </div>
         </div>
