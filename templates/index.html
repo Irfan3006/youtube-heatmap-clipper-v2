@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>YouTube Heatmap Clipper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
@@ -26,12 +29,6 @@
               <span>ID</span>
             </button>
           </div>
-          <a class="ghLink" href="https://github.com/naufaljct48" target="_blank" rel="noreferrer">
-            <svg class="ghIcon" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
-            </svg>
-            <span>NaufalJCT48</span>
-          </a>
         </div>
       </header>
 
@@ -73,8 +70,8 @@
           </div>
         </div>
 
-        <div id="heatmapSettingsBox" style="margin-top: 12px; margin-bottom: 16px; border: 1px solid var(--line); padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.02);">
-          <div class="panelTitle" style="font-size: 14px; margin-bottom: 8px; font-weight: bold; color: var(--fg);">Viral & Heatmap Settings</div>
+        <div id="heatmapSettingsBox">
+          <div class="panelTitle">Viral & Heatmap Settings</div>
           <div class="grid2">
             <div class="row">
               <label class="label">Viral Sensitivity (Sensitivitas Viral)</label>
@@ -125,7 +122,7 @@
           </div>
         </div>
 
-        <div class="grid2" style="margin-top: 12px;">
+        <div class="grid2 mt-12">
           <div class="row">
             <label class="label" data-i18n="label.padding">Padding (detik)</label>
             <input id="padding" class="input" type="number" min="0" value="10" />
@@ -138,8 +135,8 @@
           </div>
         </div>
  
-        <div id="smartCropBox" class="hide" style="margin-top: 12px; margin-bottom: 16px; border: 1px solid var(--border); padding: 12px; border-radius: 6px; background: rgba(255,255,255,0.02);">
-          <div class="panelTitle" style="font-size: 14px; margin-bottom: 8px; font-weight: bold; color: var(--fg);">Smart Crop Settings (Auto Face Tracking)</div>
+        <div id="smartCropBox" class="hide">
+          <div class="panelTitle">Smart Crop Settings (Auto Face Tracking)</div>
           <div class="grid3">
             <div class="row">
               <label class="label">Smooth Factor</label>
@@ -157,7 +154,7 @@
               <div class="help">Batas kecepatan gerakan kamera per frame (px).</div>
             </div>
           </div>
-          <div class="grid3" style="margin-top: 8px;">
+          <div class="grid3 mt-8">
             <div class="row">
               <label class="label">Relock Timeout (frames)</label>
               <input id="smart_relock_timeout" class="input" type="number" min="1" max="600" value="150" />
@@ -250,8 +247,8 @@
           <div class="help" data-i18n="help.subtitle_fontsdir">Folder berisi file .ttf/.otf buat subtitle. Default: folder project <b>fonts</b>.</div>
         </div>
 
-        <div id="customBox" class="hide" style="margin-bottom: 20px;">
-          <div class="row" style="margin-bottom: 16px;">
+        <div id="customBox" class="hide">
+          <div class="row mb-16">
             <label class="label">Jumlah Clip Manual</label>
             <input id="manual_clips_count" class="input" type="number" min="1" max="50" value="1" />
             <div class="help">Tentukan berapa banyak clip manual yang ingin dipotong secara bersamaan.</div>
