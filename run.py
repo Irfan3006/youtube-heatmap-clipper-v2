@@ -267,6 +267,84 @@ def select_non_overlapping(segments, max_count, padding, overlap_threshold=0.0):
             
     return selected
 
+def calculate_virality_metrics(seg, heatmap_raw=None, total_duration=3600):
+    """
+    Generate Smart Virality Metrics for a segment:
+    - Virality Score (int: 1-99)
+    - Hook Score (int: 1-99)
+    - Retention Score (int: 1-99)
+    - Content Trend Grade (str: A+, A, A-, B+, B, C)
+    """
+    raw_score = float(seg.get("score", 0.5) or 0.5)
+    start_t = float(seg.get("start", 0.0) or 0.0)
+    dur = float(seg.get("duration", 30.0) or 30.0)
+    end_t = start_t + dur
+
+    retention_val = 60
+    hook_val = 60
+
+    if heatmap_raw and isinstance(heatmap_raw, list) and len(heatmap_raw) > 0:
+        clip_markers = []
+        for m in heatmap_raw:
+            try:
+                m_start = float(m.get("start_time", 0.0))
+                m_end = float(m.get("end_time", 0.0))
+                if start_t <= m_start <= end_t or start_t <= m_end <= end_t:
+                    clip_markers.append(float(m.get("value", 0.0)))
+            except Exception:
+                continue
+
+        if clip_markers:
+            avg_marker = sum(clip_markers) / len(clip_markers)
+            retention_val = min(99, max(25, int(round(avg_marker * 100))))
+
+            hook_marker = clip_markers[0]
+            next_marker = clip_markers[1] if len(clip_markers) > 1 else hook_marker
+            spike_jump = max(0.0, hook_marker - next_marker)
+            hook_val = min(99, max(30, int(round((hook_marker * 0.7 + spike_jump * 0.3) * 100))))
+        else:
+            retention_val = min(99, max(35, int(round(raw_score * 90))))
+            hook_val = min(99, max(40, int(round(raw_score * 95))))
+    else:
+        base = min(95, max(55, int(round(raw_score * 88 if raw_score > 0 else 72))))
+        retention_val = base
+        hook_val = min(99, base + 6)
+
+    # Weighted Virality Score calculation: 45% Hook, 45% Retention, 10% Raw Score
+    weighted = (hook_val * 0.45) + (retention_val * 0.45) + (min(99, int(raw_score * 90)) * 0.10)
+    virality_score = min(99, max(20, int(round(weighted))))
+
+    if virality_score >= 90:
+        trend_grade = "A+"
+    elif virality_score >= 82:
+        trend_grade = "A"
+    elif virality_score >= 74:
+        trend_grade = "A-"
+    elif virality_score >= 65:
+        trend_grade = "B+"
+    elif virality_score >= 55:
+        trend_grade = "B"
+    else:
+        trend_grade = "C"
+
+    return {
+        "score": virality_score,
+        "hook": hook_val,
+        "retention": retention_val,
+        "trend": trend_grade
+    }
+
+def enrich_segments_with_virality(segments, heatmap_raw=None, total_duration=3600):
+    if not segments:
+        return []
+    enriched = []
+    for s in segments:
+        s_copy = dict(s)
+        if "virality" not in s_copy:
+            s_copy["virality"] = calculate_virality_metrics(s_copy, heatmap_raw, total_duration)
+        enriched.append(s_copy)
+    return enriched
+
 def ffmpeg_tersedia():
     return bool(shutil.which("ffmpeg"))
 
@@ -315,8 +393,8 @@ def parse_args():
         "--subtitle-lang",
         dest="subtitle_lang",
         choices=["id", "en"],
-        default="en",
-        help="Subtitle language (id or en, default: en)",
+        default="id",
+        help="Subtitle language (id or en, default: id)",
     )
     parser.add_argument("--whisper-model", dest="whisper_model", help="Faster-Whisper model")
     parser.add_argument("--subtitle-font", dest="subtitle_font", help="Subtitle font name (e.g., Poppins)")

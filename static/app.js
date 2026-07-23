@@ -520,6 +520,10 @@ function renderSegments(segments) {
     const dur = Number(s.duration || 0);
     const end = start + dur;
     const score = Number(s.score || 0);
+    const virality = s.virality || { score: Math.min(99, Math.round(score * 90) || 75), hook: 80, retention: 80, trend: "A" };
+    const trendGrade = virality.trend || "A";
+    const trendClass = `grade-${trendGrade.replace("+", "plus").replace("-", "minus")}`;
+
     const el = document.createElement("div");
     el.className = "seg";
     const key = segKey(s);
@@ -532,10 +536,12 @@ function renderSegments(segments) {
       </div>
       <div class="segMain">
         <div class="t">#${idx + 1} ${fmtTime(start)} → ${fmtTime(end)}</div>
-        <div class="m">durasi ${Math.round(dur)}s</div>
+        <div class="m">durasi ${Math.round(dur)}s • <span class="viralitySub">Hook: ${virality.hook} | Retention: ${virality.retention}</span></div>
       </div>
       <div class="segSide">
-        <div class="pill">${score.toFixed(2)}</div>
+        <div class="viralityCard" title="Score: ${virality.score} | Hook: ${virality.hook} | Retention: ${virality.retention}">
+          <span class="trendBadge ${trendClass}">${trendGrade}</span>
+        </div>
         <button class="btn ghost smallBtn" type="button" data-preview="1">Preview</button>
       </div>
     `;
@@ -629,10 +635,12 @@ function renderProgress(job) {
       const el = document.createElement("div");
       el.className = "out";
       const href = `/clips/${job.id}/${encodeURIComponent(f.name)}`;
+      const v = f.virality;
+      const vMeta = v ? `<span class="trendBadge ${`grade-${v.trend.replace("+", "plus").replace("-", "minus")}`}">${v.trend}</span>` : "";
       el.innerHTML = `
         <div class="outLeft">
           <a href="${href}" target="_blank" rel="noreferrer">${f.name}</a>
-          <div class="small">${Math.round((f.size || 0) / 1024)} KB</div>
+          <div class="small">${Math.round((f.size || 0) / 1024)} KB ${vMeta ? "• " + vMeta : ""}</div>
         </div>
         <div class="outRight">
           <button class="btn ghost smallBtn" type="button" data-play="1">Play</button>

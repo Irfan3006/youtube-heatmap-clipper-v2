@@ -69,7 +69,7 @@ def add_log(job_id, line):
             job["logs"] = job["logs"][-300:]
 
 
-def list_outputs(job_dir, job_id=None):
+def list_outputs(job_dir, job_id=None, targets=None):
     if not os.path.isdir(job_dir):
         return []
     items = []
@@ -77,7 +77,16 @@ def list_outputs(job_dir, job_id=None):
         path = os.path.join(job_dir, name)
         if os.path.isfile(path) and name.lower().endswith(".mp4"):
             if job_id is None or name.startswith(f"clip_{job_id}_"):
-                items.append({"name": name, "size": os.path.getsize(path)})
+                item = {"name": name, "size": os.path.getsize(path)}
+                if targets and isinstance(targets, list):
+                    try:
+                        parts = name.replace(".mp4", "").split("_")
+                        clip_idx = int(parts[-1]) - 1
+                        if 0 <= clip_idx < len(targets):
+                            item["virality"] = targets[clip_idx].get("virality")
+                    except Exception:
+                        pass
+                items.append(item)
     items.sort(key=lambda x: x["name"])
     return items
 
@@ -94,7 +103,7 @@ def run_job(job_id, payload):
         crop = payload.get("crop") or "smart"
         ratio = payload.get("ratio") or "9:16"
         subtitle = bool(payload.get("subtitle"))
-        subtitle_lang = payload.get("subtitle_lang") or "en"
+        subtitle_lang = payload.get("subtitle_lang") or "id"
         subtitle_style = payload.get("subtitle_style") or "sentence"
         whisper_model = payload.get("whisper_model") or "small"
         subtitle_font = payload.get("subtitle_font") or "Arial"
@@ -228,6 +237,7 @@ def run_job(job_id, payload):
             else:
                 targets = core.select_non_overlapping(targets_heatmap, max(1, max_clips or 10), padding, overlap_threshold=overlap_threshold)
 
+        targets = core.enrich_segments_with_virality(targets, total_duration=total_duration)
         set_job(job_id, total=len(targets), done=0, status_text="processing")
 
         local_video_path = os.path.join(job_dir, f"temp_full_{job_id}_{video_id}.mkv")
@@ -302,7 +312,7 @@ def run_job(job_id, payload):
                     done_count += 1
                     if ok:
                         success += 1
-                    set_job(job_id, done=done_count, success=success, outputs=list_outputs(job_dir, job_id))
+                    set_job(job_id, done=done_count, success=success, outputs=list_outputs(job_dir, job_id, targets=targets))
         finally:
             if local_video_path and os.path.exists(local_video_path):
                 add_log(job_id, "Cleaning up temporary full video file...")
@@ -311,7 +321,7 @@ def run_job(job_id, payload):
                 except Exception:
                     pass
 
-        set_job(job_id, status="done", finished_at=now_ms(), outputs=list_outputs(job_dir, job_id))
+        set_job(job_id, status="done", finished_at=now_ms(), outputs=list_outputs(job_dir, job_id, targets=targets))
     except Exception as e:
         set_job(job_id, status="error", error=str(e), finished_at=now_ms())
 
@@ -436,6 +446,7 @@ def api_scan():
                 t_start = start_margin + i * step
                 segments.append({"start": t_start, "duration": min(step, segment_len), "score": 0.5})
 
+    segments = core.enrich_segments_with_virality(segments, total_duration=total)
     segments.sort(key=lambda x: float(x.get("start", 0)))
     return jsonify({"ok": True, "video_id": video_id, "duration": total, "segments": segments})
 

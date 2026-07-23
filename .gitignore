@@ -52,6 +52,7 @@ env/
 # Model cache (Whisper/Hugging Face)
 .cache/
 models/
+*.onnx
 
 # Logs
 *.log
