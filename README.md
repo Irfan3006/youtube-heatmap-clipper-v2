@@ -12,7 +12,7 @@ This project is a further development of the project: https://github.com/naufalj
 | -------------------------- | -------------------------- |
 | ![Preview 1](images/1.png) | ![Preview 2](images/2.png) |
 | ![Preview 3](images/3.png) | ![Preview 4](images/4.png) |
-| ![Preview 5](images/5.png) |                            |
+| ![Preview 5](images/5.png) | ![Preview 6](images/6.png) |
 
 ## New and Highlighted Features
 
