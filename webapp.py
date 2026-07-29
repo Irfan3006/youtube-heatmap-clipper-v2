@@ -103,7 +103,7 @@ def run_job(job_id, payload):
         crop = payload.get("crop") or "smart"
         ratio = payload.get("ratio") or "9:16"
         subtitle = bool(payload.get("subtitle"))
-        subtitle_lang = payload.get("subtitle_lang") or "id"
+        subtitle_lang = payload.get("subtitle_lang") or "en"
         subtitle_style = payload.get("subtitle_style") or "sentence"
         whisper_model = payload.get("whisper_model") or "small"
         subtitle_font = payload.get("subtitle_font") or "Arial"

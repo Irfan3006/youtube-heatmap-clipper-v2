@@ -78,7 +78,7 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
     """
     Identify segments in the raw heatmap that show sharp intensity increases (spikes)
     above the local average. Enhance their scores by weighting both raw intensity
-    and spike magnitude.
+    and spike magnitude. Shift start times 2.5s earlier to capture the sentence buildup/hook.
     Filters out the first 10% (intro) and last 10% (outro) of the video.
     """
     if not heatmap_raw:
@@ -113,6 +113,8 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
         local_averages.append(sum(sub_vals) / len(sub_vals) if sub_vals else 0.0)
         
     enhanced_segments = []
+    hook_lead_in = 2.5  # Shift start time back by 2.5s to capture the sentence buildup/hook
+
     for i in range(n):
         try:
             marker = heatmap_raw[i]
@@ -132,25 +134,24 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
                 
             # Spike magnitude: positive rise + how much it stands above local average
             above_local = max(0.0, val - local_averages[i])
-            spike_magnitude = max(0.0, diff) + above_local
+            spike_momentum = max(0.0, diff) * 1.6 + above_local * 1.3
             
-            # Final score weighting:
-            # Tingkatkan bobot spike (0.6) agar lebih memilih momen viral/lonjakan
-            # daripada adegan datar (boring) yang hanya memiliki retensi tinggi.
-            final_score = 0.4 * val + 0.6 * spike_magnitude
+            # Final score weighting: 30% retention level + 70% hook momentum for virality
+            final_score = 0.3 * val + 0.7 * spike_momentum
             
             if final_score >= min_score:
                 duration_cap = max_duration if max_duration > 0 else 999999.0
+                adjusted_start = max(0.0, start - hook_lead_in)
+                adjusted_end = end + 1.5
                 enhanced_segments.append({
-                    "start": start,
-                    "duration": min(end - start, duration_cap),
+                    "start": adjusted_start,
+                    "duration": min(adjusted_end - adjusted_start, duration_cap),
                     "score": final_score
                 })
         except Exception:
             continue
 
-    # Fallback: jika tidak ada segmen yang lolos min_score, tapi data heatmap ada,
-    # jalankan ulang dengan min_score = 0.0 agar selalu mendapat segmen terbaik.
+    # Fallback: jika tidak ada segmen yang lolos min_score, tapi data heatmap ada
     if not enhanced_segments and heatmap_raw:
         for i in range(n):
             try:
@@ -168,13 +169,15 @@ def detect_viral_spikes(heatmap_raw, min_score=0.20, max_duration=60):
                     diff = 0.0
                     
                 above_local = max(0.0, val - local_averages[i])
-                spike_magnitude = max(0.0, diff) + above_local
-                final_score = 0.4 * val + 0.6 * spike_magnitude
+                spike_momentum = max(0.0, diff) * 1.6 + above_local * 1.3
+                final_score = 0.3 * val + 0.7 * spike_momentum
                 
                 duration_cap = max_duration if max_duration > 0 else 999999.0
+                adjusted_start = max(0.0, start - hook_lead_in)
+                adjusted_end = end + 1.5
                 enhanced_segments.append({
-                    "start": start,
-                    "duration": min(end - start, duration_cap),
+                    "start": adjusted_start,
+                    "duration": min(adjusted_end - adjusted_start, duration_cap),
                     "score": final_score
                 })
             except Exception:
@@ -269,10 +272,10 @@ def select_non_overlapping(segments, max_count, padding, overlap_threshold=0.0):
 
 def calculate_virality_metrics(seg, heatmap_raw=None, total_duration=3600):
     """
-    Generate Smart Virality Metrics for a segment:
-    - Virality Score (int: 1-99)
-    - Hook Score (int: 1-99)
-    - Retention Score (int: 1-99)
+    Generate High-Performance Smart Virality Metrics for a segment:
+    - Virality Score (int: 1-99) weighted with 50% Hook, 40% Retention, 10% Raw Score
+    - Hook Score (int: 1-99) measuring first 5 seconds attention acceleration & peak
+    - Retention Score (int: 1-99) measuring average segment retention stability
     - Content Trend Grade (str: A+, A, A-, B+, B, C)
     """
     raw_score = float(seg.get("score", 0.5) or 0.5)
@@ -285,12 +288,16 @@ def calculate_virality_metrics(seg, heatmap_raw=None, total_duration=3600):
 
     if heatmap_raw and isinstance(heatmap_raw, list) and len(heatmap_raw) > 0:
         clip_markers = []
+        first_5s_markers = []
         for m in heatmap_raw:
             try:
                 m_start = float(m.get("start_time", 0.0))
                 m_end = float(m.get("end_time", 0.0))
                 if start_t <= m_start <= end_t or start_t <= m_end <= end_t:
-                    clip_markers.append(float(m.get("value", 0.0)))
+                    val = float(m.get("value", 0.0))
+                    clip_markers.append(val)
+                    if m_start <= start_t + 5.0:
+                        first_5s_markers.append(val)
             except Exception:
                 continue
 
@@ -298,20 +305,23 @@ def calculate_virality_metrics(seg, heatmap_raw=None, total_duration=3600):
             avg_marker = sum(clip_markers) / len(clip_markers)
             retention_val = min(99, max(25, int(round(avg_marker * 100))))
 
-            hook_marker = clip_markers[0]
-            next_marker = clip_markers[1] if len(clip_markers) > 1 else hook_marker
-            spike_jump = max(0.0, hook_marker - next_marker)
-            hook_val = min(99, max(30, int(round((hook_marker * 0.7 + spike_jump * 0.3) * 100))))
+            # Hook calculation: focus on the first 5s peak & initial attention momentum
+            hook_base = sum(first_5s_markers) / len(first_5s_markers) if first_5s_markers else clip_markers[0]
+            max_hook_peak = max(first_5s_markers) if first_5s_markers else clip_markers[0]
+            initial_jump = max(0.0, max_hook_peak - clip_markers[0])
+            
+            # Combine peak intensity, base retention, and jump acceleration for Hook rating
+            hook_val = min(99, max(35, int(round((max_hook_peak * 0.50 + hook_base * 0.35 + initial_jump * 0.15) * 100))))
         else:
             retention_val = min(99, max(35, int(round(raw_score * 90))))
-            hook_val = min(99, max(40, int(round(raw_score * 95))))
+            hook_val = min(99, max(45, int(round(raw_score * 98))))
     else:
         base = min(95, max(55, int(round(raw_score * 88 if raw_score > 0 else 72))))
         retention_val = base
-        hook_val = min(99, base + 6)
+        hook_val = min(99, base + 8)
 
-    # Weighted Virality Score calculation: 45% Hook, 45% Retention, 10% Raw Score
-    weighted = (hook_val * 0.45) + (retention_val * 0.45) + (min(99, int(raw_score * 90)) * 0.10)
+    # Viral Shorts Optimization: 50% Hook, 40% Retention, 10% Raw Score
+    weighted = (hook_val * 0.50) + (retention_val * 0.40) + (min(99, int(raw_score * 90)) * 0.10)
     virality_score = min(99, max(20, int(round(weighted))))
 
     if virality_score >= 90:
@@ -393,8 +403,8 @@ def parse_args():
         "--subtitle-lang",
         dest="subtitle_lang",
         choices=["id", "en"],
-        default="id",
-        help="Subtitle language (id or en, default: id)",
+        default="en",
+        help="Subtitle language (id or en, default: en)",
     )
     parser.add_argument("--whisper-model", dest="whisper_model", help="Faster-Whisper model")
     parser.add_argument("--subtitle-font", dest="subtitle_font", help="Subtitle font name (e.g., Poppins)")
@@ -738,7 +748,7 @@ def get_duration(video_id):
     return 3600
 
 
-def transcribe_segment(video_file, language="id", subtitle_style="sentence", event_hook=None):
+def transcribe_segment(video_file, language="en", subtitle_style="sentence", event_hook=None):
     """
     Transcribe video_file using Faster-Whisper and return raw segments.
     """
@@ -1060,7 +1070,7 @@ def write_srt_from_segments(segments, subtitle_file, subtitle_style="sentence", 
     return True
 
 
-def generate_subtitle(video_file, subtitle_file, event_hook=None, language="id", subtitle_style="sentence"):
+def generate_subtitle(video_file, subtitle_file, event_hook=None, language="en", subtitle_style="sentence"):
     try:
         segments = transcribe_segment(video_file, language, subtitle_style, event_hook)
         return write_srt_from_segments(segments, subtitle_file, subtitle_style, t_start=0.0, t_end=None, event_hook=event_hook)
@@ -1967,7 +1977,7 @@ def main():
     else:
         use_subtitle = None
 
-    subtitle_lang = args.subtitle_lang or "id"
+    subtitle_lang = args.subtitle_lang or "en"
     subtitle_style = args.subtitle_style or "sentence"
 
     link = args.url
