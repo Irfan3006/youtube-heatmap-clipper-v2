@@ -14,42 +14,60 @@ echo(
 set "VENV_DIR=venv"
 set "PYTHON_CMD="
 
-if exist "%VENV_DIR%\Scripts\python.exe" set "PYTHON_CMD=%VENV_DIR%\Scripts\python.exe"
-if defined PYTHON_CMD goto :DEPS
+if not exist "%VENV_DIR%\Scripts\python.exe" goto :CREATE_VENV
 
-echo [*] Virtual Environment tidak ditemukan.
-echo [*] Mencoba membuat venv baru dengan Python 3.11...
+set "PYTHON_CMD=%VENV_DIR%\Scripts\python.exe"
+"%PYTHON_CMD%" -m pip --version >nul 2>&1
+if not errorlevel 1 goto :DEPS
 
-py -3.11 --version >nul 2>nul
-if errorlevel 1 goto :TRY_SYSTEM_PY
+echo [WARN] Virtual environment ditemukan tetapi pip bermasalah.
+echo [*] Memperbaiki virtual environment yang rusak...
+rmdir /s /q "%VENV_DIR%" >nul 2>&1
+set "PYTHON_CMD="
 
+:CREATE_VENV
+echo [*] Mempersiapkan Virtual Environment baru dengan Python...
+
+py -3.11 --version >nul 2>&1
+if errorlevel 1 goto :TRY_PY3
 echo [OK] Python 3.11 ditemukan. Membuat venv...
 py -3.11 -m venv "%VENV_DIR%"
-if errorlevel 1 goto :VENV_FAIL
-goto :SET_PY
+goto :CHECK_VENV
 
-:TRY_SYSTEM_PY
-echo [WARN] Python 3.11 tidak ditemukan di system.
-echo [*] Menggunakan default 'python' system...
-python --version >nul 2>nul
+:TRY_PY3
+py -3 --version >nul 2>&1
+if errorlevel 1 goto :TRY_PYTHON
+echo [OK] Python 3 (py launcher) ditemukan. Membuat venv...
+py -3 -m venv "%VENV_DIR%"
+goto :CHECK_VENV
+
+:TRY_PYTHON
+python --version >nul 2>&1
 if errorlevel 1 goto :NO_PY
+echo [OK] Python system ditemukan. Membuat venv...
 python -m venv "%VENV_DIR%"
-if errorlevel 1 goto :VENV_FAIL
+goto :CHECK_VENV
 
-:SET_PY
-if not exist "%VENV_DIR%\Scripts\python.exe" goto :VENV_FAIL
+:CHECK_VENV
+if exist "%VENV_DIR%\Scripts\python.exe" goto :VENV_SUCCESS
+goto :VENV_FAIL
+
+:VENV_SUCCESS
 set "PYTHON_CMD=%VENV_DIR%\Scripts\python.exe"
+"%PYTHON_CMD%" -m pip --version >nul 2>&1
+if errorlevel 1 "%PYTHON_CMD%" -m ensurepip --default-pip >nul 2>&1
 echo [OK] Venv berhasil dibuat.
+goto :DEPS
 
 :DEPS
 echo(
 echo [*] Checking ^& Installing dependencies...
-"%PYTHON_CMD%" -m pip install --upgrade pip >nul
+"%PYTHON_CMD%" -m pip install --upgrade pip >nul 2>&1
 "%PYTHON_CMD%" -m pip install -r requirements.txt
 if errorlevel 1 goto :REQ_FAIL
 
 echo [*] Checking AI Subtitle dependencies (faster-whisper)...
-"%PYTHON_CMD%" -c "import faster_whisper" >nul 2>nul
+"%PYTHON_CMD%" -c "import faster_whisper" >nul 2>&1
 if errorlevel 1 goto :INSTALL_FWHISPER
 echo [OK] faster-whisper already installed.
 goto :RUN
@@ -79,7 +97,7 @@ echo(
 
 if defined YHC_CHECK_ONLY goto :DONE
 
-start http://127.0.0.1:5000
+start "" /b cmd /c "timeout /t 3 /nobreak >nul & start http://127.0.0.1:5000"
 "%PYTHON_CMD%" webapp.py
 goto :DONE
 
@@ -113,24 +131,24 @@ set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Pytho
 
 echo [*] Memeriksa kembali Python...
 
-py -3.11 --version >nul 2>nul
+py -3.11 --version >nul 2>&1
 if not errorlevel 1 (
     echo [OK] Python 3.11 berhasil terinstall.
     py -3.11 -m venv "%VENV_DIR%"
-    if not errorlevel 1 goto :SET_PY
+    goto :CHECK_VENV
 )
 
 if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
     echo [OK] Python 3.11 terinstall di %LOCALAPPDATA%\Programs\Python\Python311.
     "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" -m venv "%VENV_DIR%"
-    if not errorlevel 1 goto :SET_PY
+    goto :CHECK_VENV
 )
 
-python --version >nul 2>nul
+python --version >nul 2>&1
 if not errorlevel 1 (
     echo [OK] Python terinstall.
     python -m venv "%VENV_DIR%"
-    if not errorlevel 1 goto :SET_PY
+    goto :CHECK_VENV
 )
 
 echo [X] Gagal mendeteksi Python secara otomatis setelah instalasi.
@@ -148,13 +166,11 @@ goto :FAIL
 :FAIL
 echo(
 echo [INFO] Aplikasi berhenti.
-echo Tekan sembarang tombol untuk menutup jendela ini...
-pause
+if not defined YHC_CHECK_ONLY pause
 exit /b 1
 
 :DONE
 echo(
 echo [INFO] Aplikasi berhenti.
-echo Tekan sembarang tombol untuk menutup jendela ini...
-pause
+if not defined YHC_CHECK_ONLY pause
 exit /b 0

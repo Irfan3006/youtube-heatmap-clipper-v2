@@ -16,37 +16,49 @@ This project is a further development of the project: https://github.com/naufalj
 
 ## New and Highlighted Features
 
-This project has been updated with a focus on user experience, processing efficiency, and AI accuracy:
+This project has been updated with a focus on user experience, processing efficiency, AI accuracy, and viral content curation:
 
-### 1. Smart Face Tracking with 99% Accuracy
-*   **Hybrid Face Detection**: Uses the advanced YuNet DNN Face Detector Deep Learning model as the primary detector (automatically downloaded on first launch) and falls back to Haar Cascades (Frontal and Profile) if hardware-accelerated DNN is not supported.
+### 1. Smart Face Tracking with 99% Accuracy & Multi-Strategy
+*   **Default Cropping Mode**: Smart Crop (Face Tracking) is enabled by default for automated, professional-grade vertical clip creation.
+*   **Hybrid Face Detection**: Uses the advanced YuNet DNN Face Detector Deep Learning model as the primary detector (automatically downloaded on first launch) with Haar Cascades (Frontal and Profile) fallback.
+*   **Multi-Strategy Face Tracking**:
+    *   `hybrid` (Presenter / Recommended): Intelligently tracks the main speaker while ignoring background audiences using distance thresholding.
+    *   `center`: Locks strictly onto the face closest to the center of the frame.
+    *   `largest`: Locks onto the largest detected face in frame.
+*   **Audience Rejection & Distance Threshold**: Prevents unexpected camera jumps by filtering out distant background audience faces.
 *   **Scene Change Detection**: Intelligently detects camera cuts or transitions to instantly lock (auto-snap) onto the new face position without delay.
 *   **Cinematic Smoothing and Deadzone**: Features a LERP smoothing algorithm for fluid camera panning and adjustable Deadzone configurations to filter out minor, jittery camera movements.
 
-### 2. Advanced Heatmap Algorithm
-*   **Viral Spike Detection**: The updated algorithm computes the mathematical derivative and local average of viewer retention to target actual engagement spikes, which represent the most viral moments.
+### 2. Smart Virality Metrics & Advanced Heatmap Algorithm
+*   **Smart Virality Grade Badges**: Evaluates each segment with a Virality Score (1-99), Hook Score (first 5s attention momentum), Retention Score, and visual Virality Grade Badges (`VIRAL`, `HIGH`, `GOOD`, `A+`, `A`, `A-`, `B+`, etc.).
+*   **2.5s Lead-In Hook Capture**: Automatically shifts clip start timestamps 2.5 seconds earlier to capture speech buildup, context, and hook preceding peak engagement moments.
+*   **Viral Shorts Optimization Weighting**: Combines 50% Hook, 40% Retention, and 10% Raw Score specifically designed for viral short-form video algorithms.
 *   **Smart Intro and Outro Filter**: Automatically filters out the first 10% (intro) and last 10% (outro) of the video to avoid clipping empty scenes or end screens.
-*   **Viral Sensitivity and Overlap Filter**: Adjusts sensitivity levels (Low, Medium, High, Extreme) and overlap threshold configurations to obtain the best non-overlapping viral clip curations.
+*   **Viral Sensitivity and Overlap Filter**: Adjusts sensitivity levels (Low, Medium, High, Extreme) and overlap threshold rules (Strict, Moderate, Loose, None) for optimal clip curation.
 
-### 3. Faster with Multi-Worker Parallel Processing
-*   **Parallel Processing Speedup**: Processes clips concurrently using a ThreadPoolExecutor with worker counts automatically and dynamically scaled based on system CPU threads.
-*   **Fast-Seek Direct Stream Extraction**: Downloads segments rapidly via direct stream URL extraction with FFmpeg, or downloads the full video locally first for instant parallel slicing.
+### 3. Modern Slate & Cyan UI/UX Redesign
+*   **Modern Glassmorphism Aesthetics**: Complete UI redesign featuring a sleek Slate & Cyan dark mode theme, responsive card layouts, top progress bar indicator, and dynamic job badges.
+*   **Interactive Heatmap Scan & Selection**: Scans video URLs instantly to display engagement graphs, Virality Grade Badges, individual segment checkboxes, and one-click Select All / Clear options.
+*   **Bulk Processing and Custom Ranges**: Select multiple segments to process concurrently or define custom manual start and end timestamps.
+*   **Real-time Logs and Built-in Player**: Monitor progress in real-time through the console log panel, and play or download completed clips directly from the browser.
 
-### 4. Focused on Web GUI for Ease of Use
-*   **Refined Web UI**: Developed and enhanced the existing Flask-based interface to make it more responsive, intuitive, and easier to navigate without complex manual steps.
-*   **Interactive Heatmap Scan**: Scans video URLs instantly to display all viral segments alongside interactive engagement graphs.
-*   **Bulk Processing and Custom Ranges**: Allows selecting multiple segments to process and export them concurrently, or defining custom start and end timestamps manually.
-*   **Real-time Logs and Built-in Player**: Monitors extraction progress in real-time through the log output panel, and allows playing or downloading completed clips directly from the browser.
+### 4. Automated One-Click Setup (`web_start.bat` / `start.bat`)
+*   **Auto Python Installer**: Automatically checks for Python on Windows and downloads/installs it if not present.
+*   **Auto Environment & Dependency Setup**: Automatically creates a isolated Python Virtual Environment (`venv`) and installs/updates requirements from `requirements.txt`.
+*   **Auto Browser Launch**: Automatically opens your default web browser to `http://127.0.0.1:5000/` upon server startup.
 
-### 5. Diverse Dynamic Subtitle Styles (Faster-Whisper)
-*   **Faster Transcription**: Powered by Faster-Whisper, reducing transcription wait times to 4 or 5 times faster compared to the standard OpenAI Whisper implementation.
+### 5. Multi-Worker Parallel Processing & Faster-Whisper Subtitles
+*   **Multi-Worker Parallel Processing**: Processes clips concurrently using a ThreadPoolExecutor with worker counts automatically scaled based on CPU threads.
+*   **Fast-Seek Direct Stream Extraction**: Downloads segments rapidly via direct stream URL extraction with FFmpeg or local full-video slicing.
+*   **Faster-Whisper AI Subtitles**: Powered by Faster-Whisper, delivering 4-5x faster transcription speed (supports `tiny`, `base`, `small`, `medium`, `large-v3`).
+*   **Default English (`en`) & Indonesian (`id`) Support**: Subtitle language defaults to English (`en`) with full support for Indonesian (`id`).
 *   **5 Dynamic Subtitle Display Styles**:
     *   `sentence`: Displays the complete sentence normally.
     *   `word_by_word`: Displays text dynamically word-by-word.
     *   `phrase_by_phrase`: Displays short, easy-to-read phrases of up to 3 words.
     *   `line_by_line`: Displays line-by-line, automatically formatting longer text into up to 2 lines.
     *   `karaoke`: A dynamic karaoke effect that highlights the active word in yellow (#FFCC00).
-*   **Custom Fonts and Placement**: Supports preferred fonts (Plus Jakarta Sans, Roboto, Montserrat, Arial, or Custom) and allows setting the location to either the middle (Centered) or the bottom (Bottom) of the frame.
+*   **Custom Fonts and Placement**: Supports preferred fonts (Plus Jakarta Sans, Montserrat, Roboto, Arial, or Custom) and screen locations (`bottom` or `center`).
 
 ---
 
@@ -69,10 +81,11 @@ This project has been updated with a focus on user experience, processing effici
 ## How to Use (Easiest Way)
 
 Double-click the **web_start.bat** (or **start.bat**) file. The script will automatically:
-1. Verify and install requirements in requirements.txt.
-2. Create a secure Python Virtual Environment (venv).
-3. Check for FFmpeg in the system path.
-4. Launch the Flask web server.
+1. Auto-detect and download/install Python on Windows if missing.
+2. Create and configure a Python Virtual Environment (`venv`).
+3. Verify and install requirements in `requirements.txt`.
+4. Check for FFmpeg in the system path.
+5. Launch the Flask web server and automatically open your default browser to `http://127.0.0.1:5000/`.
 
 ## Installation and Running Manually
 
@@ -96,14 +109,15 @@ Open your browser and navigate to:
 
 1.  **Paste YouTube URL**: The video metadata (title, channel, thumbnail) will load automatically.
 2.  **Select Clipping Mode**:
-    *   **Scan Heatmap**: Click **Scan Heatmap** to auto-detect viral segments, check the boxes of the clips you want, and click **Create Selected Clips**.
-    *   **Custom**: Enter manual **Start** and **End** times, and click the button to create manual ranges.
+    *   **Scan Heatmap**: Click **Scan Heatmap** to auto-detect viral segments, review Virality Grade Badges, check desired clips, and click **Create Selected Clips**.
+    *   **Custom**: Enter manual **Start** and **End** times to create manual ranges.
 3.  **Configure Options**:
-    *   **Ratio**: Select 9:16 (Vertical), 1:1 (Square), 16:9 (Horizontal), or Original ratio.
-    *   **Crop Mode**: Select default (center crop), split (displays main video on top, facecam on the bottom-left or bottom-right), or smart (99% accurate face tracking crop).
-    *   **Subtitle**: Turn on subtitles, choose language (ID/EN), choose Whisper model size, select font, style, and screen location.
-    *   **Smart Crop Settings**: Fine-tune the smoothing factor, deadzone, tracking speed, and relock timeout parameters to optimize face tracking camera movements.
-4.  **Export**: Track clipping progress in the console log at the bottom. Once complete, play or download your clips directly from the interface.
+    *   **Ratio**: Select 9:16 (Shorts/Reels/TikTok), 1:1 (Square), 16:9 (Horizontal), or Original ratio.
+    *   **Crop Mode**: Select **Smart Crop (Face Tracking)** (Default), default (center crop), or split (displays main video on top, facecam on bottom).
+    *   **Tracking Strategy**: Choose **Hybrid / Presenter** (Recommended), Center Face Only, or Largest Face Only.
+    *   **Subtitle**: Enable subtitles, choose language (EN/ID), Whisper model size, font, display style, and screen location.
+    *   **Smart Crop Settings**: Fine-tune the smoothing factor, deadzone, tracking speed, relock timeout, and padding parameters.
+4.  **Export**: Track progress in real-time in the progress panel. Once complete, play or download your clips directly from the browser.
 
 ---
 
@@ -111,14 +125,15 @@ Open your browser and navigate to:
 
 If you prefer terminal commands, run:
 ```powershell
-python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --subtitle y --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-location bottom --subtitle-style karaoke --ratio 9:16
+python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --smart-tracking-strategy hybrid --subtitle y --subtitle-lang en --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-location bottom --subtitle-style karaoke --ratio 9:16
 ```
 
 ### Key CLI Arguments:
-*   `--crop`: default | split_left | split_right | smart (Face Tracking)
+*   `--crop`: smart (Default) | default | split_left | split_right
+*   `--smart-tracking-strategy`: hybrid (Default) | center | largest
 *   `--ratio`: 9:16 | 1:1 | 16:9 | original
 *   `--subtitle`: y | n
-*   `--subtitle-lang`: id | en (Default: en)
+*   `--subtitle-lang`: en (Default) | id
 *   `--whisper-model`: tiny | base | small | medium | large-v3
 *   `--subtitle-font`: Font name (e.g. Poppins)
 *   `--subtitle-style`: sentence | word_by_word | phrase_by_phrase | line_by_line | karaoke

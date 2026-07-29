@@ -16,37 +16,49 @@ Proyek ini merupakan pengembangan lebih lanjut dari proyek: https://github.com/n
 
 ## Fitur Baru dan Unggulan
 
-Proyek ini telah diperbarui secara menyeluruh untuk meningkatkan efisiensi pemrosesan, akurasi pelacakan, dan kemudahan bagi pengguna:
+Proyek ini telah diperbarui secara menyeluruh untuk meningkatkan efisiensi pemrosesan, akurasi pelacakan, pengalaman pengguna, dan kurasi konten viral:
 
-### 1. Smart Face Tracking dengan Akurasi 99%
-*   **Hybrid Face Detection**: Menggunakan model Deep Learning YuNet DNN Face Detector sebagai sistem pendeteksi utama (yang otomatis diunduh pada saat pertama kali dijalankan) dengan sistem cadangan Haar Cascades (Frontal dan Profile) jika perangkat keras tidak mendukung DNN.
-*   **Scene Change Detection**: Mendeteksi perubahan adegan kamera secara otomatis untuk mengunci posisi wajah baru secara instan tanpa adanya jeda.
-*   **Cinematic Smoothing dan Deadzone**: Menggunakan algoritma LERP smoothing untuk menghasilkan gerakan kamera yang mulus serta konfigurasi Deadzone untuk meminimalisasi getaran kecil pada kamera.
+### 1. Smart Face Tracking dengan Akurasi 99% & Multi-Strategi
+*   **Mode Pemotongan Default**: Smart Crop (Face Tracking) kini diaktifkan secara default untuk pembuatan klip vertikal otomatis yang profesional.
+*   **Hybrid Face Detection**: Menggunakan model Deep Learning YuNet DNN Face Detector sebagai sistem pendeteksi utama (yang otomatis diunduh pada saat pertama kali dijalankan) dengan sistem cadangan Haar Cascades (Frontal dan Profile).
+*   **Mode Multi-Strategi Pelacakan Wajah**:
+    *   `hybrid` (Presenter / Direkomendasikan): Secara cerdas melacak pembicara utama serta mengabaikan penonton di latar belakang menggunakan ambang batas jarak.
+    *   `center`: Mengunci wajah yang berada paling dekat dengan pusat layar secara ketat.
+    *   `largest`: Mengunci wajah dengan ukuran terbesar di dalam bingkai video.
+*   **Penolakan Penonton & Batas Jarak**: Mencegah pergerakan kamera mendadak dengan memfilter wajah penonton atau latar belakang yang jauh.
+*   **Scene Change Detection**: Mendeteksi perpindahan adegan kamera secara otomatis untuk mengunci posisi wajah baru secara instan tanpa jeda.
+*   **Cinematic Smoothing dan Deadzone**: Menggunakan algoritma LERP smoothing untuk gerakan kamera yang mulus serta konfigurasi Deadzone untuk meminimalisasi getaran kecil pada kamera.
 
-### 2. Algoritma Heatmap Lanjutan
-*   **Viral Spike Detection**: Algoritma ini menganalisis turunan nilai retensi serta rata-rata lokal untuk mendeteksi lonjakan interaksi yang sebenarnya pada video.
-*   **Smart Intro dan Outro Filter**: Mengabaikan 10% bagian awal (intro) dan 10% bagian akhir (outro) video secara otomatis untuk menghindari pemotongan pada segmen kosong atau layar akhir.
-*   **Sensitivitas Viral dan Filter Overlap**: Menyediakan pengaturan sensitivitas (Low, Medium, High, Extreme) serta pengaturan batasan tumpang tindih (overlap threshold) untuk hasil kurasi klip terbaik.
+### 2. Metrik Virallitas Cerdas & Algoritma Heatmap Lanjutan
+*   **Badge Tingkat Virallitas Cerdas**: Mengevaluasi setiap segmen dengan Skor Virallitas (1-99), Skor Hook (momentum perhatian 5 detik pertama), Skor Retensi, dan Badge Tingkatan visual (`VIRAL`, `HIGH`, `GOOD`, `A+`, `A`, `A-`, `B+`, dll.).
+*   **Tangkapan Hook Awal 2,5 Detik**: Otomatis memajukan waktu mulai klip 2,5 detik lebih awal untuk menangkap pembukaan kalimat, konteks pembicaraan, dan hook sebelum puncak interaksi.
+*   **Bobot Optimasi Video Pendek Viral**: Menggabungkan 50% Hook, 40% Retensi, dan 10% Skor Mentah yang dirancang khusus untuk algoritma platform video pendek (Shorts/Reels/TikTok).
+*   **Smart Intro dan Outro Filter**: Mengabaikan 10% bagian awal (intro) dan 10% bagian akhir (outro) video secara otomatis untuk menghindari pemotongan segmen kosong atau layar akhir.
+*   **Sensitivitas Viral dan Filter Overlap**: Pengaturan sensitivitas (Low, Medium, High, Extreme) serta batasan tumpang tindih (Strict, Moderate, Loose, None) untuk hasil kurasi klip terbaik.
 
-### 3. Multi-Worker untuk Pemrosesan Paralel Cepat
-*   **Akselerasi Paralel**: Pemrosesan klip dijalankan secara bersamaan menggunakan ThreadPoolExecutor dengan penyesuaian jumlah thread worker secara otomatis berdasarkan kapasitas CPU sistem.
-*   **Fast-Seek Direct Stream**: Mengunduh klip secara cepat melalui ekstraksi langsung tautan streaming video menggunakan FFmpeg, atau opsi untuk mengunduh seluruh file video terlebih dahulu secara lokal sebelum melakukan pemotongan secara paralel.
+### 3. Redesain Antarmuka Modern (Tema Slate & Cyan)
+*   **Estetika Glassmorphism Modern**: Redesain total antarmuka dengan tema dark mode Slate & Cyan yang elegan, tata letak kartu responsif, bilah kemajuan utama di bagian atas (top progress bar), serta badge status dinamis.
+*   **Scan Heatmap Interaktif & Seleksi Segmen**: Memindai tautan YouTube untuk menampilkan grafik tingkat interaksi, Badge Virallitas, kotak centang segmen individu, serta tombol Select All / Clear sekali klik.
+*   **Pemrosesan Massal & Rentang Manual**: Memproses banyak segmen pilihan sekaligus secara paralel atau menentukan rentang waktu mulai/selesai secara manual.
+*   **Log Real-time & Pemutar Video Terintegrasi**: Memantau perkembangan secara langsung melalui panel log, serta memutar atau mengunduh klip hasil pemotongan langsung dari browser.
 
-### 4. Antarmuka Grafis (Web GUI) yang Berfokus pada Pengguna
-*   **Web UI Lebih Praktis**: Mengembangkan antarmuka berbasis Flask yang sudah ada agar lebih responsif, intuitif, dan memudahkan navigasi pengguna tanpa memerlukan langkah manual yang rumit.
-*   **Scan Heatmap Interaktif**: Memindai video untuk menampilkan daftar semua segmen terpopuler beserta grafik tingkat interaksinya secara visual.
-*   **Pemrosesan Massal dan Custom Range**: Pengguna dapat memilih beberapa segmen sekaligus untuk diproses atau menentukan rentang waktu mulai dan selesai secara manual.
-*   **Log Real-time dan Preview**: Memantau perkembangan pemrosesan klip melalui panel log secara langsung serta memutar atau mengunduh klip hasil pemotongan langsung dari browser.
+### 4. Konfigurasi Otomatis Sekali Klik (`web_start.bat` / `start.bat`)
+*   **Pemasang Otomatis Python**: Mengidentifikasi ketersediaan Python pada Windows dan mengunduh/mempersiapkannya secara otomatis jika belum terpasang.
+*   **Lingkungan & Pustaka Otomatis**: Membuat Python Virtual Environment (`venv`) dan memasang/memperbarui pustaka dari `requirements.txt` secara otomatis.
+*   **Buka Peramban Otomatis**: Membuka peramban (browser) default secara otomatis ke alamat `http://127.0.0.1:5000/` begitu server siap.
 
-### 5. Pilihan Gaya Subtitle Dinamis (Faster-Whisper)
-*   **Transkripsi Cepat**: Didukung oleh Faster-Whisper yang memiliki kecepatan 4 hingga 5 kali lebih cepat dibandingkan dengan Whisper standar.
-*   **5 Gaya Tampilan Subtitle**:
+### 5. Pemrosesan Paralel Multi-Worker & Subtitle Faster-Whisper
+*   **Pemrosesan Paralel Multi-Worker**: Pemrosesan klip dijalankan secara bersamaan menggunakan ThreadPoolExecutor dengan penyesuaian jumlah thread worker secara otomatis berdasarkan kapasitas CPU.
+*   **Fast-Seek Direct Stream**: Mengunduh segmen secara cepat melalui ekstraksi langsung tautan streaming video atau pemotongan berkas lokal.
+*   **Subtitle AI Faster-Whisper**: Didukung oleh Faster-Whisper yang memiliki kecepatan transkripsi 4 hingga 5 kali lebih cepat (mendukung model `tiny`, `base`, `small`, `medium`, `large-v3`).
+*   **Dukungan Default Inggris (`en`) & Indonesia (`id`)**: Bahasa default subtitle disetel ke Bahasa Inggris (`en`) dengan dukungan penuh untuk Bahasa Indonesia (`id`).
+*   **5 Gaya Tampilan Subtitle Dinamis**:
     *   `sentence`: Menampilkan kalimat lengkap secara terstruktur.
     *   `word_by_word`: Menampilkan teks kata demi kata secara dinamis.
     *   `phrase_by_phrase`: Menampilkan frasa pendek (maksimal 3 kata) untuk kemudahan membaca.
     *   `line_by_line`: Menampilkan per baris (membagi otomatis kalimat panjang menjadi maksimal 2 baris yang rapi).
     *   `karaoke`: Memberikan efek karaoke dinamis dengan menandai kata aktif menggunakan warna kuning terang (#FFCC00).
-*   **Kustomisasi Font dan Lokasi**: Mendukung berbagai jenis font (Plus Jakarta Sans, Roboto, Montserrat, Arial, atau Font Kustom) serta pilihan penempatan subtitle di posisi tengah (Centered) atau bawah (Bottom).
+*   **Kustomisasi Font dan Lokasi**: Mendukung berbagai jenis font (Plus Jakarta Sans, Montserrat, Roboto, Arial, atau Font Kustom) serta penempatan posisi subtitle (`bottom` atau `center`).
 
 ---
 
@@ -69,10 +81,11 @@ Proyek ini telah diperbarui secara menyeluruh untuk meningkatkan efisiensi pemro
 ## Metode Penggunaan Termudah
 
 Jalankan file skrip **web_start.bat** (atau **start.bat**). Skrip ini akan secara otomatis melakukan konfigurasi berikut:
-1. Memeriksa dan memasang semua pustaka yang tercantum pada file requirements.txt.
-2. Membuat Python Virtual Environment (venv) yang terisolasi dan aman.
-3. Memeriksa ketersediaan program FFmpeg pada sistem.
-4. Menjalankan Flask web server secara otomatis.
+1. Mendeteksi dan mengunduh/mempersiapkan Python di Windows secara otomatis jika belum ada.
+2. Membuat dan mengonfigurasi Python Virtual Environment (`venv`).
+3. Memeriksa dan memasang semua pustaka yang tercantum pada file `requirements.txt`.
+4. Memeriksa ketersediaan program FFmpeg pada sistem.
+5. Menjalankan Flask web server dan secara otomatis membuka peramban default ke `http://127.0.0.1:5000/`.
 
 ## Instalasi dan Pengoperasian Manual
 
@@ -96,14 +109,15 @@ Buka peramban (browser) Anda dan akses alamat berikut:
 
 1.  **Masukkan URL YouTube**: Informasi metadata video (judul, pengunggah, durasi, dan gambar mini) akan dimuat secara otomatis.
 2.  **Pilih Mode Pemotongan**:
-    *   **Scan Heatmap**: Klik tombol **Scan Heatmap** untuk mendeteksi momen terpopuler secara otomatis, pilih segmen yang diinginkan, kemudian klik tombol **Create Selected Clips**.
-    *   **Custom**: Masukkan waktu **Start** dan **End** secara manual, kemudian klik tombol untuk membuat klip.
+    *   **Scan Heatmap**: Klik tombol **Scan Heatmap** untuk mendeteksi momen terpopuler secara otomatis, meninjau Badge Virallitas, memilih segmen yang diinginkan, kemudian klik tombol **Create Selected Clips**.
+    *   **Custom**: Masukkan waktu **Start** dan **End** secara manual untuk membuat klip custom.
 3.  **Pengaturan Tambahan**:
-    *   **Ratio**: Pilih rasio keluaran antara 9:16 (Vertikal), 1:1 (Kotak), 16:9 (Horizontal), atau Original.
-    *   **Crop Mode**: Pilih antara default (potongan tengah), split (membagi layar untuk menampilkan video utama di atas dan kamera wajah di bawah), atau smart (pemotongan cerdas berbasis pelacakan wajah dengan akurasi 99%).
-    *   **Subtitle**: Aktifkan opsi subtitle, pilih bahasa (ID/EN), pilih ukuran model Whisper, font, gaya tampilan, dan lokasi tampilan subtitle.
-    *   **Smart Crop Settings**: Konfigurasikan parameter pelacakan seperti smoothing factor, deadzone, tracking speed, dan relock timeout untuk mengoptimalkan pergerakan kamera face tracking.
-4.  **Proses Ekspor**: Log proses pembuatan klip akan ditampilkan di bagian bawah halaman. Setelah proses selesai, klip video dapat langsung diputar atau diunduh ke perangkat Anda.
+    *   **Ratio**: Pilih rasio keluaran antara 9:16 (Shorts/Reels/TikTok), 1:1 (Kotak), 16:9 (Horizontal), atau Original.
+    *   **Crop Mode**: Pilih **Smart Crop (Face Tracking)** (Default), default (potongan tengah), atau split (video utama di atas, facecam di bawah).
+    *   **Strategi Pelacakan**: Pilih **Hybrid / Presenter** (Direkomendasikan), Center Face Only, atau Largest Face Only.
+    *   **Subtitle**: Aktifkan opsi subtitle, pilih bahasa (EN/ID), pilih ukuran model Whisper, font, gaya tampilan, dan lokasi tampilan subtitle.
+    *   **Smart Crop Settings**: Konfigurasikan parameter pelacakan seperti smoothing factor, deadzone, tracking speed, relock timeout, dan crop padding.
+4.  **Proses Ekspor**: Pantau kemajuan pada panel progress secara real-time. Setelah proses selesai, klip video dapat langsung diputar atau diunduh ke perangkat Anda.
 
 ---
 
@@ -111,14 +125,15 @@ Buka peramban (browser) Anda dan akses alamat berikut:
 
 Jika Anda lebih memilih penggunaan terminal, jalankan perintah berikut:
 ```powershell
-python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --subtitle y --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-location bottom --subtitle-style karaoke --ratio 9:16
+python run.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --crop smart --smart-tracking-strategy hybrid --subtitle y --subtitle-lang en --whisper-model small --subtitle-font "Plus Jakarta Sans" --subtitle-location bottom --subtitle-style karaoke --ratio 9:16
 ```
 
 ### Parameter CLI Utama:
-*   `--crop`: default | split_left | split_right | smart (Face Tracking)
+*   `--crop`: smart (Default) | default | split_left | split_right
+*   `--smart-tracking-strategy`: hybrid (Default) | center | largest
 *   `--ratio`: 9:16 | 1:1 | 16:9 | original
 *   `--subtitle`: y | n
-*   `--subtitle-lang`: id | en (Default: en)
+*   `--subtitle-lang`: en (Default) | id
 *   `--whisper-model`: tiny | base | small | medium | large-v3
 *   `--subtitle-font`: Nama font (misalnya Poppins)
 *   `--subtitle-style`: sentence | word_by_word | phrase_by_phrase | line_by_line | karaoke
